@@ -6,205 +6,262 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Score Sheet</title>
   <link rel="icon" href="./page_icon.png" type="image/png"> 
-  <link rel="shortcut icon" href="./page_icon.png" type="image/png">
 
   <style>
-    /* CSS styles for the page layout and design */
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #9c9c9c;
-      margin: 0;
-      padding: 12px;
-    }
-    .form-container {
-      background-color: #ffffff;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      max-width: 700px;
-      margin: auto;
-      border: 6px solid #6b2c3e;
-    }
-    .logo-title-container {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 5px;
-    }
-    .logo {
-      height: 80px;
-      margin-right: 20px;
-    }
-    h2 {
-      text-align: center;
-      color: #6b2c3e;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 15px;
-    }
-    th, td {
-      border: 1px solid #6b2c3e;
-      padding: 5px;
-      text-align: center;
-      background-color: #ffffff;
-    }
-    th {
-      background-color: #e1d4c8;
-      color: #6b2c3e;
-    }
-    select {
-      width: 90%;
-      padding: 8px;
-      margin-bottom: 10px;
-      border: 1px solid #6b2c3e;
-      border-radius: 4px;
-      background-color: #f7f3f0;
-    }
-    textarea {
-      overflow-y: hidden;
-      resize: none;
-      width: 100%;
-      border: 1px solid #6b2c3e;
-      border-radius: 4px;
-      padding: 8px;
-      background-color: #f7f3f0;
-    }
-    input[type="button"], .add-score {
-      padding: 10px;
-      background-color: #6b2c3e;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      flex: 1;
-    }
-    .taller-button {
-      padding: 12.5px 10px; /* Increase height by 25% */
-    }
-    input[type="button"]:hover, .add-score:hover {
-      background-color: #5a2435;
-    }
-    .locked {
-      background-color: #ffffff;
-      pointer-events: none;
-    }
-    .popup {
-      display: none;
-      position: fixed;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      background-color: #fff;
-      padding: 20px;
-      box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.5);
-      z-index: 100;
-    }
-    .popup select, .popup input[type="button"] {
-      width: 100%;
-      margin-top: 10px;
-    }
-    .overlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.7);
-      z-index: 99;
-    }
-    /* Center team list boxes */
-    .team-list-container {
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      margin-top: 20px;
-    }
-    .team-list-container > div {
-      flex: 1;
-      margin: 0 10px;
-    }
-    /* Reduce font size in the scoring table */
-    #scoringTableBody td, #scoringTableBody th {
-      font-size: 14px;
-    }
-    /* Add gap between buttons */
-    .add-score-buttons {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-    /* Responsive adjustments */
-    @media (max-width: 600px) {
-      .logo-title-container {
-        flex-direction: column;
-      }
-      .logo {
-        margin-right: 0;
-        margin-bottom: 10px;
-      }
-      .team-list-container {
-        flex-direction: column;
-        align-items: center;
-      }
-      .team-list-container > div {
-        margin: 10px 0;
-      }
-    }
-    /* Styles for the logged data display */
-    #loggedDataContainer {
-      max-width: 700px;
-      margin: 20px auto;
-      background-color: #ffffff;
-      padding: 20px;
-      border-radius: 8px;
-      border: 2px solid #6b2c3e;
-    }
-    #loggedDataTable {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    #loggedDataTable th, #loggedDataTable td {
-      border: 1px solid #6b2c3e;
-      padding: 10px;
-      text-align: center;
-    }
-    #loggedDataTable th {
-      background-color: #e1d4c8;
-      color: #6b2c3e;
-    }
-    /* Styles for the success message */
-    #successMessage {
-      max-width: 700px;
-      margin: 20px auto;
-      background-color: #d4edda; /* Light green background */
-      color: #155724; /* Dark green text */
-      border: 1px solid #c3e6cb; /* Green border */
-      padding: 15px;
-      border-radius: 4px;
-      font-size: 16px;
-      text-align: center;
-    }
-    /* Styles for the submit section and loading animation */
-    .submit-section {
-      display: flex;
-      align-items: center;
-    }
-    #loadingAnimation {
-      margin-left: 10px;
-      font-size: 16px;
-      color: #6b2c3e;
-    }
+    /* Updated CSS styles for a more pleasant UI,
+   using a blue-to-purple gradient based on the provided image. */
+
+body {
+  font-family: Arial, sans-serif;
+  /* Light-to-deep gradient from the reference image */
+  background: linear-gradient(to bottom,
+    #a3ccff, /* Lighter blue at the top */
+    #70a7ff,
+    #3e82ff,
+    #3058ff,
+    #372da5,
+    #532baf,
+    #6c41b8  /* Deep purple at the bottom */
+  );
+  padding: 12px;
+  margin: 0;
+}
+
+/* Container for the form and main content */
+.form-container {
+  background-color: #f8f8ff; /* A softer white-ish background */
+  padding: 20px;
+  border-radius: 8px;
+  border: 4px solid #3e82ff; /* Use a medium blue border */
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+  max-width: 700px;
+  margin: auto;
+}
+
+/* Logo and title area */
+.logo-title-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.logo {
+  height: 80px;
+  margin-right: 20px;
+}
+h2 {
+  text-align: center;
+  color: #3e82ff;
+  margin: 0;
+  padding: 0;
+}
+
+/* Tables for team selection and scoring */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 15px;
+}
+th, td {
+  border: 1px solid #3e82ff;
+  padding: 8px;
+  text-align: center;
+  background-color: #ffffff;
+}
+th {
+  background-color: #3a61ff; /* Lighter blue for header cells */
+  color: #ffffff;           /* White text on the header cells */
+  font-weight: bold;
+}
+
+/* Form elements (select, textarea) */
+select {
+  width: 90%;
+  padding: 8px;
+  margin-bottom: 10px;
+  border: 1px solid #3a61ff;
+  border-radius: 4px;
+  background-color: #e3ecff; /* Very light bluish background */
+}
+textarea {
+  overflow-y: hidden;
+  resize: none;
+  width: 100%;
+  border: 1px solid #3a61ff;
+  border-radius: 4px;
+  padding: 8px;
+  background-color: #e3ecff;
+}
+
+/* Buttons for adding scores and submitting */
+input[type="button"], .add-score {
+  padding: 10px;
+  background-color: #3e82ff;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  flex: 1;
+  font-weight: bold;
+}
+.taller-button {
+  padding: 12.5px 10px; /* Increase height by 25% */
+}
+input[type="button"]:hover, .add-score:hover {
+  background-color: #3a61ff; /* Darken on hover */
+}
+
+/* Disable elements (if needed) */
+.locked {
+  background-color: #ffffff;
+  pointer-events: none;
+}
+
+/* Popup (Add Score) and overlay */
+.popup {
+  display: none;
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background-color: #fff;
+  padding: 20px;
+  border: 2px solid #3e82ff;
+  border-radius: 6px;
+  box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  width: 300px;
+  max-width: 80%;
+}
+.popup select,
+.popup input[type="button"] {
+  width: 100%;
+  margin-top: 10px;
+}
+.overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 99;
+}
+
+/* Layout for team lists side by side */
+.team-list-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  margin-top: 20px;
+}
+.team-list-container > div {
+  flex: 1;
+  margin: 0 10px;
+}
+@media (max-width: 600px) {
+  .logo-title-container {
+    flex-direction: column;
+  }
+  .logo {
+    margin-right: 0;
+    margin-bottom: 10px;
+  }
+  .team-list-container {
+    flex-direction: column;
+    align-items: center;
+  }
+  .team-list-container > div {
+    margin: 10px 0;
+  }
+}
+
+/* Scoring table font size */
+#scoringTableBody td,
+#scoringTableBody th {
+  font-size: 14px;
+}
+
+/* Space between add-score buttons */
+.add-score-buttons {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+/* Logged data display container */
+#loggedDataContainer {
+  max-width: 700px;
+  margin: 20px auto;
+  background-color: #ffffff;
+  padding: 20px;
+  border-radius: 8px;
+  border: 2px solid #3e82ff;
+}
+#loggedDataTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+#loggedDataTable th,
+#loggedDataTable td {
+  border: 1px solid #3e82ff;
+  padding: 10px;
+  text-align: center;
+}
+#loggedDataTable th {
+  background-color: #70a7ff;
+  color: #ffffff;
+}
+
+/* Success message styling */
+#successMessage {
+  max-width: 700px;
+  margin: 20px auto;
+  background-color: #e1f9e5; /* Light green background */
+  color: #155724;           /* Dark green text */
+  border: 1px solid #a4e6b1;/* Greenish border */
+  padding: 15px;
+  border-radius: 4px;
+  font-size: 16px;
+  text-align: center;
+}
+
+/* Loading overlay & popup styling */
+#loadingOverlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 999;
+}
+#loadingPopup {
+  display: none;
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 6px;
+  border: 2px solid #3e82ff;
+  box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  width: 200px;
+  text-align: center;
+}
+
   </style>
 </head>
 <body>
   <div class="form-container">
     <div class="logo-title-container">
       <img src="SU Comm - Universal logo.jpg" alt="Maties Ultimate Frisbee" class="logo">
-      <h2>IDL 3.0</h2>
+      <h2>Summer Draft League</h2>
     </div>
     <form id="scoreForm">
       <!-- Description Table -->
@@ -261,11 +318,8 @@
         </div>
       </div>
 
-      <!-- Submit Section with Loading Animation -->
-      <div class="submit-section">
-        <input type="button" value="Submit" onclick="submitScore()">
-        <div id="loadingAnimation" style="display: none;">Loading<span id="dots"></span></div>
-      </div>
+      <!-- Submit Button -->
+      <input type="button" value="Submit" onclick="submitScore()">
     </form>
   </div>
 
@@ -305,6 +359,12 @@
     <input type="button" value="Add Score" onclick="addScore()">
   </div>
 
+  <!-- Loading Popup -->
+  <div id="loadingOverlay"></div>
+  <div id="loadingPopup">
+    <p id="loadingMessage">Loading...</p>
+  </div>
+
   <script>
     // Initialize score variables
     let teamAScore = 0;
@@ -312,9 +372,6 @@
 
     // Global variable to store team data
     let teamsData = [];
-
-    // Variable for loading animation interval
-    let loadingInterval;
 
     // Wait for the DOM to load before executing scripts
     document.addEventListener("DOMContentLoaded", () => {
@@ -380,7 +437,6 @@
 
     // Function to update the player list for the selected team
     function updatePlayerList(team) {
-      // Use the cached teamsData instead of parsing sessionStorage again
       const selectedTeam = document.getElementById(team).value;
       const playerListElement = document.getElementById(`${team}List`);
 
@@ -439,6 +495,12 @@
       document.getElementById('scorePopup').dataset.team = team;
     }
 
+    // Function to close the popup for adding a score
+    function closePopup() {
+      document.getElementById('overlay').style.display = 'none';
+      document.getElementById('scorePopup').style.display = 'none';
+    }
+
     // Function to add a score entry to the scoring table
     function addScore() {
       const team = document.getElementById('scorePopup').dataset.team;
@@ -446,6 +508,12 @@
       const assist = document.getElementById('assist').value;
 
       if (scorer && assist) {
+        // Optional check if scorer === assist (to prevent same player for both)
+        // if (scorer === assist) {
+        //   alert("Scorer and Assist cannot be the same player!");
+        //   return;
+        // }
+
         const scoringTableBody = document.getElementById('scoringTableBody');
         const row = document.createElement('tr');
 
@@ -539,35 +607,28 @@
       }
     }
 
-    // Function to close the popup
-    function closePopup() {
-      document.getElementById('overlay').style.display = 'none';
-      document.getElementById('scorePopup').style.display = 'none';
+    /* === LOADING POPUP FUNCTIONS === */
+    function showLoadingPopup() {
+      document.getElementById('loadingOverlay').style.display = 'block';
+      document.getElementById('loadingPopup').style.display = 'block';
+      document.getElementById('loadingMessage').textContent = 'Loading...';
     }
 
-    // Function to start the loading animation
-    function startLoadingAnimation() {
-      const loadingAnimation = document.getElementById('loadingAnimation');
-      const dots = document.getElementById('dots');
-      let dotCount = 0;
-
-      loadingAnimation.style.display = 'block';
-      loadingInterval = setInterval(() => {
-        dotCount = (dotCount + 1) % 4; // cycles through 0 to 3
-        dots.textContent = '.'.repeat(dotCount);
-      }, 500); // Update every 500ms
+    function setUploadedMessage() {
+      // Change message to "Uploaded :)"
+      document.getElementById('loadingMessage').textContent = 'Uploaded :)';
+      // Hide after a short delay
+      setTimeout(() => {
+        hideLoadingPopup();
+      }, 1500);
     }
 
-    // Function to stop the loading animation
-    function stopLoadingAnimation() {
-      const loadingAnimation = document.getElementById('loadingAnimation');
-      const dots = document.getElementById('dots');
-      clearInterval(loadingInterval);
-      dots.textContent = '';
-      loadingAnimation.style.display = 'none';
+    function hideLoadingPopup() {
+      document.getElementById('loadingOverlay').style.display = 'none';
+      document.getElementById('loadingPopup').style.display = 'none';
     }
 
-    // Modified submitScore function to send data to Google Sheets
+    // Function to submit data to Google Sheets
     async function submitScore() {
       // Retrieve the logged data from sessionStorage
       const scoreLogs = JSON.parse(sessionStorage.getItem('scoreLogs')) || [];
@@ -590,11 +651,11 @@
       };
 
       try {
-        // Start the loading animation
-        startLoadingAnimation();
+        // Show "Loading..." popup
+        showLoadingPopup();
 
         // Send the data to the Google Apps Script web app
-        const response = await fetch('https://script.google.com/macros/s/AKfycbzcg2i_dSDPwpgs5aHZz6glU4K0z2K6A3CfNxrinzDDff9rYQ6uSA35Btp2hUebFU4/exec', {
+        await fetch('https://script.google.com/macros/s/AKfycbzcg2i_dSDPwpgs5aHZz6glU4K0z2K6A3CfNxrinzDDff9rYQ6uSA35Btp2hUebFU4/exec', {
           method: 'POST',
           mode: 'no-cors', // 'no-cors' to prevent CORS issues
           headers: {
@@ -603,22 +664,22 @@
           body: JSON.stringify(dataToSend)
         });
 
-        // Since we're using 'no-cors', we cannot read the response
-        // Assume success and display the success message
-
-        // Stop the loading animation
-        stopLoadingAnimation();
+        // Since we're using 'no-cors', we cannot read the actual response
+        // Assume success:
+        setUploadedMessage();
 
         // Display the success message
         document.getElementById('successMessage').textContent = 'Data has been successfully exported!';
         document.getElementById('successMessage').style.display = 'block';
 
-        // Optionally, clear the sessionStorage and reset the form
+        // Clear the sessionStorage logs if you want to reset
         sessionStorage.removeItem('scoreLogs');
-        // Reset form fields and variables if necessary
+        // Optionally reset scores and the form
+        teamAScore = 0;
+        teamBScore = 0;
       } catch (error) {
-        // Stop the loading animation
-        stopLoadingAnimation();
+        // Hide the popup if there's an error
+        hideLoadingPopup();
         alert('Error exporting data: ' + error.message);
       }
     }
