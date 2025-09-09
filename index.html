@@ -1,270 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <!-- Metadata and CSS styles -->
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Score Sheet</title>
-  <link rel="icon" href="./page_icon.png" type="image/png"> 
-
-  <style>
-    /* Updated CSS styles for a more pleasant UI,
-   using a blue-to-purple gradient based on the provided image. */
-
-body {
-  font-family: Arial, sans-serif;
-  /* Light-to-deep gradient from the reference image */
-  background: linear-gradient(to bottom,
-    #a3ccff, /* Lighter blue at the top */
-    #70a7ff,
-    #3e82ff,
-    #3058ff,
-    #372da5,
-    #532baf,
-    #6c41b8  /* Deep purple at the bottom */
-  );
-  padding: 12px;
-  margin: 0;
-}
-
-/* Container for the form and main content */
-.form-container {
-  background-color: #f8f8ff; /* A softer white-ish background */
-  padding: 20px;
-  border-radius: 8px;
-  border: 4px solid #3e82ff; /* Use a medium blue border */
-  box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
-  max-width: 700px;
-  margin: auto;
-}
-
-/* Logo and title area */
-.logo-title-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 10px;
-}
-.logo {
-  height: 80px;
-  margin-right: 20px;
-}
-h2 {
-  text-align: center;
-  color: #3e82ff;
-  margin: 0;
-  padding: 0;
-}
-
-/* Tables for team selection and scoring */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 15px;
-}
-th, td {
-  border: 1px solid #3e82ff;
-  padding: 8px;
-  text-align: center;
-  background-color: #ffffff;
-}
-th {
-  background-color: #3a61ff; /* Lighter blue for header cells */
-  color: #ffffff;           /* White text on the header cells */
-  font-weight: bold;
-}
-
-/* Form elements (select, textarea) */
-select {
-  width: 90%;
-  padding: 8px;
-  margin-bottom: 10px;
-  border: 1px solid #3a61ff;
-  border-radius: 4px;
-  background-color: #e3ecff; /* Very light bluish background */
-}
-textarea {
-  overflow-y: hidden;
-  resize: none;
-  width: 100%;
-  border: 1px solid #3a61ff;
-  border-radius: 4px;
-  padding: 8px;
-  background-color: #e3ecff;
-}
-
-/* Buttons for adding scores and submitting */
-input[type="button"], .add-score {
-  padding: 10px;
-  background-color: #3e82ff;
-  color: #ffffff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  flex: 1;
-  font-weight: bold;
-}
-.taller-button {
-  padding: 12.5px 10px; /* Increase height by 25% */
-}
-input[type="button"]:hover, .add-score:hover {
-  background-color: #3a61ff; /* Darken on hover */
-}
-
-/* Disable elements (if needed) */
-.locked {
-  background-color: #ffffff;
-  pointer-events: none;
-}
-
-/* Popup (Add Score) and overlay */
-.popup {
-  display: none;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  background-color: #fff;
-  padding: 20px;
-  border: 2px solid #3e82ff;
-  border-radius: 6px;
-  box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.5);
-  z-index: 100;
-  width: 300px;
-  max-width: 80%;
-}
-.popup select,
-.popup input[type="button"] {
-  width: 100%;
-  margin-top: 10px;
-}
-.overlay {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.7);
-  z-index: 99;
-}
-
-/* Layout for team lists side by side */
-.team-list-container {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  margin-top: 20px;
-}
-.team-list-container > div {
-  flex: 1;
-  margin: 0 10px;
-}
-@media (max-width: 600px) {
-  .logo-title-container {
-    flex-direction: column;
-  }
-  .logo {
-    margin-right: 0;
-    margin-bottom: 10px;
-  }
-  .team-list-container {
-    flex-direction: column;
-    align-items: center;
-  }
-  .team-list-container > div {
-    margin: 10px 0;
-  }
-}
-
-/* Scoring table font size */
-#scoringTableBody td,
-#scoringTableBody th {
-  font-size: 14px;
-}
-
-/* Space between add-score buttons */
-.add-score-buttons {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-
-/* Logged data display container */
-#loggedDataContainer {
-  max-width: 700px;
-  margin: 20px auto;
-  background-color: #ffffff;
-  padding: 20px;
-  border-radius: 8px;
-  border: 2px solid #3e82ff;
-}
-#loggedDataTable {
-  width: 100%;
-  border-collapse: collapse;
-}
-#loggedDataTable th,
-#loggedDataTable td {
-  border: 1px solid #3e82ff;
-  padding: 10px;
-  text-align: center;
-}
-#loggedDataTable th {
-  background-color: #70a7ff;
-  color: #ffffff;
-}
-
-/* Success message styling */
-#successMessage {
-  max-width: 700px;
-  margin: 20px auto;
-  background-color: #e1f9e5; /* Light green background */
-  color: #155724;           /* Dark green text */
-  border: 1px solid #a4e6b1;/* Greenish border */
-  padding: 15px;
-  border-radius: 4px;
-  font-size: 16px;
-  text-align: center;
-}
-
-/* Loading overlay & popup styling */
-#loadingOverlay {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.7);
-  z-index: 999;
-}
-#loadingPopup {
-  display: none;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 6px;
-  border: 2px solid #3e82ff;
-  box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.5);
-  z-index: 1000;
-  width: 200px;
-  text-align: center;
-}
-
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=0.9">
+  <title>CTFDA League Score Sheet</title>
+  <link rel="icon" href="./CTFDA - logo.png" type="image/png"> 
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preload" href="/images/CTFDA - logo.png" as="image">
 </head>
+
 <body>
   <div class="form-container">
-    <div class="logo-title-container">
-      <img src="SU Comm - Universal logo.jpg" alt="Maties Ultimate Frisbee" class="logo">
-      <h2>Summer Draft League</h2>
+
+    <div class="site-header ctfda">
+    <img src="CTFDA - logo.png" alt="Cape Town Flying Disc Association" class="header-image">
+    <a href="index.html" class="home-button">Home</a>
     </div>
+
+    <div class="site-title">
+    <h2>Internal Draft League</h2>
+    </div>
+
+
     <form id="scoreForm">
-      <!-- Description Table -->
       <table>
         <tr>
           <th>Team A</th>
@@ -282,28 +42,61 @@ input[type="button"]:hover, .add-score:hover {
             </select>
           </td>
         </tr>
+      <input type="hidden" id="time" name="time">
+      </table>
+
+      <!-- Timer Table-->
+      <table class="timer-table">
         <tr>
-          <th>Time</th>
-          <td><input type="text" id="time" value="" readonly></td>
+          <td class="timer-left" id="timerColumn">
+            <div id="timerDisplay" class="timer-display">100:00</div>
+
+            <label for="countdownTime" class="timer-label">Set Time (min):</label>
+            <input type="number" id="countdownTime" value="100" min="1" max="300" class="timer-input">
+          </td>
+          
+          <td class="timer-right">
+            <button type="button" class="main-button taller-button" id="resetBtn">Reset</button>
+            <button type="button" class="main-button taller-button PausePlay-button" id="playPauseBtn">Play</button>
+          </td>
+        </tr>
+        <!-- Seconds Timer Row -->
+        <tr>
+          <td class="timer-left" id="timerColumnSec">
+            <div id="timerDisplaySec" class="timer-display">01:30</div>
+
+            <label for="countdownTimeSec" class="timer-label">Set Time (sec):</label>
+            <input type="number" id="countdownTimeSec" value="90" min="1" max="3600" class="timer-input">
+          </td>
+
+          <td class="timer-right">
+            <button type="button" class="main-button taller-button" id="resetSecBtn">Reset</button>
+            <button type="button" class="main-button taller-button PausePlay-button" id="playPauseSecBtn">Play</button>
+          </td>
         </tr>
       </table>
+       
 
       <!-- Scoring Table -->
       <table>
         <tr>
-          <th>Score A</th>
-          <th>Assist A</th>
-          <th>Total</th>
-          <th>Score B</th>
-          <th>Assist B</th>
+          <th class="abba-col"><span class="abba-label">ABBA</span><select id="abbaStart"><option value="M">M</option><option value="F">F</option></select></th>
+          <th class="score-col">Score A</th>
+          <th class="assist-col">Assist A</th>
+          <th class="total-col">Total</th>
+          <th class="score-col">Score B</th>
+          <th class="assist-col">Assist B</th>
+          <th>Edit</th>
         </tr>
         <tbody id="scoringTableBody"></tbody>
       </table>
 
       <!-- Add Score Buttons -->
-      <div class="add-score-buttons">
-        <button type="button" class="add-score taller-button" onclick="openPopup('A')">+ Add Score for Team A</button>
-        <button type="button" class="add-score" onclick="openPopup('B')">+ Add Score for Team B</button>
+      <div class="add-score-button">
+        <button type="button" class="main-button taller-button add-score" id="addScoreTeamA">
+          + Add Score for Team A </button>
+        <button type="button" class="main-button taller-button add-score" id="addScoreTeamB">
+          + Add Score for Team B </button>
       </div>
 
       <!-- Team List Section -->
@@ -318,8 +111,14 @@ input[type="button"]:hover, .add-score:hover {
         </div>
       </div>
 
-      <!-- Submit Button -->
-      <input type="button" value="Submit" onclick="submitScore()">
+      <!-- Submit Section with Loading Animation -->
+      <div class="submit-section">
+        <input type="button" value="Submit" id="submitBtn">
+        <div id="loadingAnimation" style="display: none;">
+          Loading <span id="dots"></span>
+        </div>
+      </div>
+
     </form>
   </div>
 
@@ -345,344 +144,44 @@ input[type="button"]:hover, .add-score:hover {
     </table>
   </div>
 
-  <!-- Popup for Adding Score -->
+  <!-- Popup for Adding/Editing Score -->
   <div class="overlay" id="overlay"></div>
   <div class="popup" id="scorePopup">
-    <button type="button" onclick="closePopup()" style="float: right; background: none; border: none; font-size: 16px; cursor: pointer;">&times;</button>
-    <h3>Add Score</h3>
+    <button
+      type="button"
+      id="closePopupBtn"
+      style="float: right; background: none; border: none; font-size: 40px; cursor: pointer;">
+      &times;
+    </button>
+
+    <h3 id="popupTitle">Add new point</h3>
+
+    <!-- Scorer heading -->
+    <label for="scorer" style="font-weight: bold;">Scorer:</label>
     <select id="scorer" required>
       <option value="">Select Scorer</option>
     </select>
+
+    <!-- Assist heading -->
+    <label for="assist" style="font-weight: bold;">Assist:</label>
     <select id="assist" required>
       <option value="">Select Assist</option>
     </select>
-    <input type="button" value="Add Score" onclick="addScore()">
-  </div>
 
-  <!-- Loading Popup -->
-  <div id="loadingOverlay"></div>
-  <div id="loadingPopup">
-    <p id="loadingMessage">Loading...</p>
+    <input type="button" id="popupButton" value="Add Score">
   </div>
-
+  
+  <!-- Warn before unload -->
   <script>
-    // Initialize score variables
-    let teamAScore = 0;
-    let teamBScore = 0;
-
-    // Global variable to store team data
-    let teamsData = [];
-
-    // Wait for the DOM to load before executing scripts
-    document.addEventListener("DOMContentLoaded", () => {
-      // Set the current time in the 'Time' input field
-      document.getElementById('time').value = new Date().toLocaleString();
-      fetchTeams(); // Fetch team data from the server or cache
+    window.addEventListener('beforeunload', function (e) {
+      // Modern browsers require preventDefault and returnValue set
+      e.preventDefault();
+      e.returnValue = '';
+      // Some browsers also respect returned string
+      return '';
     });
-
-    // Function to fetch teams from sessionStorage or server
-    async function fetchTeams() {
-      const storedTeams = sessionStorage.getItem('teams');
-      if (storedTeams) {
-        // If teams are stored in sessionStorage, parse and use them
-        const teams = JSON.parse(storedTeams);
-        teamsData = teams; // Cache the teams data globally
-        populateTeamOptions(teams);
-      } else {
-        // If not, fetch from the server
-        try {
-          const response = await fetch('https://script.google.com/macros/s/AKfycbzcg2i_dSDPwpgs5aHZz6glU4K0z2K6A3CfNxrinzDDff9rYQ6uSA35Btp2hUebFU4/exec');
-          const teams = await response.json();
-          teamsData = teams; // Cache the teams data globally
-          sessionStorage.setItem('teams', JSON.stringify(teams)); // Store in sessionStorage for future use
-          populateTeamOptions(teams);
-        } catch (error) {
-          console.error('Error fetching team names:', error);
-        }
-      }
-    }
-
-    // Function to populate the team selection dropdowns
-    function populateTeamOptions(teams) {
-      const teamASelect = document.getElementById('teamA');
-      const teamBSelect = document.getElementById('teamB');
-      // Get unique team names using a Set
-      const uniqueTeams = [...new Set(teams.map(item => item.teamA))];
-
-      // Create document fragments for efficient DOM updates
-      const fragmentA = document.createDocumentFragment();
-      const fragmentB = document.createDocumentFragment();
-
-      uniqueTeams.forEach(team => {
-        // Create option elements for each team
-        const optionA = document.createElement('option');
-        optionA.value = team;
-        optionA.textContent = team;
-        fragmentA.appendChild(optionA);
-
-        const optionB = document.createElement('option');
-        optionB.value = team;
-        optionB.textContent = team;
-        fragmentB.appendChild(optionB);
-      });
-
-      // Append all options at once to the select elements
-      teamASelect.appendChild(fragmentA);
-      teamBSelect.appendChild(fragmentB);
-
-      // Add event listeners to update player lists when team selection changes
-      teamASelect.addEventListener('change', () => updatePlayerList('teamA'));
-      teamBSelect.addEventListener('change', () => updatePlayerList('teamB'));
-    }
-
-    // Function to update the player list for the selected team
-    function updatePlayerList(team) {
-      const selectedTeam = document.getElementById(team).value;
-      const playerListElement = document.getElementById(`${team}List`);
-
-      // Filter players belonging to the selected team and sort alphabetically
-      const players = teamsData.filter(item => item.teamA === selectedTeam)
-                               .map(item => item.teamB)
-                               .sort();
-
-      // Display players in the textarea, one per line
-      playerListElement.value = players.join('\n');
-
-      // Adjust the height of the textarea to fit the content
-      playerListElement.style.height = 'auto';
-      playerListElement.style.height = (playerListElement.scrollHeight) + 'px';
-    }
-
-    // Function to open the popup for adding a score
-    function openPopup(team) {
-      // Display the overlay and popup
-      document.getElementById('overlay').style.display = 'block';
-      document.getElementById('scorePopup').style.display = 'block';
-
-      const scorerDropdown = document.getElementById('scorer');
-      const assistDropdown = document.getElementById('assist');
-
-      // Reset the dropdowns
-      scorerDropdown.innerHTML = '<option value="">Select Scorer</option>';
-      assistDropdown.innerHTML = '<option value="">Select Assist</option>';
-
-      // Get the list of players for the selected team
-      const playersText = document.getElementById(team === 'A' ? 'teamAList' : 'teamBList').value;
-      const players = playersText ? playersText.split('\n') : [];
-
-      // Create document fragments for efficient DOM updates
-      const fragmentScorer = document.createDocumentFragment();
-      const fragmentAssist = document.createDocumentFragment();
-
-      players.forEach(player => {
-        // Create option elements for scorer and assist
-        const optionScorer = document.createElement('option');
-        optionScorer.value = player;
-        optionScorer.textContent = player;
-        fragmentScorer.appendChild(optionScorer);
-
-        const optionAssist = document.createElement('option');
-        optionAssist.value = player;
-        optionAssist.textContent = player;
-        fragmentAssist.appendChild(optionAssist);
-      });
-
-      // Append all options at once to the dropdowns
-      scorerDropdown.appendChild(fragmentScorer);
-      assistDropdown.appendChild(fragmentAssist);
-
-      // Store the team in the popup's dataset for later reference
-      document.getElementById('scorePopup').dataset.team = team;
-    }
-
-    // Function to close the popup for adding a score
-    function closePopup() {
-      document.getElementById('overlay').style.display = 'none';
-      document.getElementById('scorePopup').style.display = 'none';
-    }
-
-    // Function to add a score entry to the scoring table
-    function addScore() {
-      const team = document.getElementById('scorePopup').dataset.team;
-      const scorer = document.getElementById('scorer').value;
-      const assist = document.getElementById('assist').value;
-
-      if (scorer && assist) {
-        // Optional check if scorer === assist (to prevent same player for both)
-        // if (scorer === assist) {
-        //   alert("Scorer and Assist cannot be the same player!");
-        //   return;
-        // }
-
-        const scoringTableBody = document.getElementById('scoringTableBody');
-        const row = document.createElement('tr');
-
-        // Create the row content based on which team scored
-        if (team === 'A') {
-          // If team A scored
-          row.innerHTML = `
-            <td>${scorer}</td>
-            <td>${assist}</td>
-            <td class="total"></td>
-            <td></td>
-            <td></td>
-          `;
-        } else {
-          // If team B scored
-          row.innerHTML = `
-            <td></td>
-            <td></td>
-            <td class="total"></td>
-            <td>${scorer}</td>
-            <td>${assist}</td>
-          `;
-        }
-
-        // Append the new row to the scoring table
-        scoringTableBody.appendChild(row);
-
-        // Update the cumulative score
-        updateScore(team);
-
-        // Update the 'Total' cell with the current cumulative score
-        const totalCell = row.querySelector('.total');
-        totalCell.textContent = `${teamAScore}:${teamBScore}`;
-
-        // Log data into sessionStorage
-        logScoreData(team, scorer, assist);
-
-        // Close the popup
-        closePopup();
-      } else {
-        alert('Please select both scorer and assist.');
-      }
-    }
-
-    // Function to log the score data into sessionStorage
-    function logScoreData(teamLetter, scorer, assist) {
-      // Retrieve existing score logs from sessionStorage or initialize as empty array
-      let scoreLogs = JSON.parse(sessionStorage.getItem('scoreLogs')) || [];
-
-      // Get the selected teams
-      const teamAName = document.getElementById('teamA').value;
-      const teamBName = document.getElementById('teamB').value;
-
-      // Check if both teams are selected
-      if (!teamAName || !teamBName) {
-        alert('Please select both Team A and Team B before adding scores.');
-        return;
-      }
-
-      // Create the GameID
-      const gameID = `${teamAName} vs ${teamBName}`;
-
-      // Get the time of logging
-      const timeOfLogging = new Date().toLocaleString();
-
-      // Determine the team who scored
-      const teamName = teamLetter === 'A' ? teamAName : teamBName;
-
-      // Create the log object
-      const logEntry = {
-        GameID: gameID,
-        Time: timeOfLogging,
-        Team: teamName,
-        Score: scorer,
-        Assist: assist
-      };
-
-      // Add the new log entry to the array
-      scoreLogs.push(logEntry);
-
-      // Save the updated array back to sessionStorage
-      sessionStorage.setItem('scoreLogs', JSON.stringify(scoreLogs));
-    }
-
-    // Function to update the cumulative score
-    function updateScore(team) {
-      if (team === 'A') {
-        teamAScore += 1;
-      } else if (team === 'B') {
-        teamBScore += 1;
-      }
-    }
-
-    /* === LOADING POPUP FUNCTIONS === */
-    function showLoadingPopup() {
-      document.getElementById('loadingOverlay').style.display = 'block';
-      document.getElementById('loadingPopup').style.display = 'block';
-      document.getElementById('loadingMessage').textContent = 'Loading...';
-    }
-
-    function setUploadedMessage() {
-      // Change message to "Uploaded :)"
-      document.getElementById('loadingMessage').textContent = 'Uploaded :)';
-      // Hide after a short delay
-      setTimeout(() => {
-        hideLoadingPopup();
-      }, 1500);
-    }
-
-    function hideLoadingPopup() {
-      document.getElementById('loadingOverlay').style.display = 'none';
-      document.getElementById('loadingPopup').style.display = 'none';
-    }
-
-    // Function to submit data to Google Sheets
-    async function submitScore() {
-      // Retrieve the logged data from sessionStorage
-      const scoreLogs = JSON.parse(sessionStorage.getItem('scoreLogs')) || [];
-
-      if (scoreLogs.length === 0) {
-        alert('No scores have been logged.');
-        return;
-      }
-
-      // Prepare the data to send
-      const teamAName = document.getElementById('teamA').value;
-      const teamBName = document.getElementById('teamB').value;
-      const gameID = `${teamAName} vs ${teamBName}`;
-      const date = new Date().toLocaleDateString();
-
-      const dataToSend = {
-        GameID: gameID,
-        Date: date,
-        logs: scoreLogs
-      };
-
-      try {
-        // Show "Loading..." popup
-        showLoadingPopup();
-
-        // Send the data to the Google Apps Script web app
-        await fetch('https://script.google.com/macros/s/AKfycbzcg2i_dSDPwpgs5aHZz6glU4K0z2K6A3CfNxrinzDDff9rYQ6uSA35Btp2hUebFU4/exec', {
-          method: 'POST',
-          mode: 'no-cors', // 'no-cors' to prevent CORS issues
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(dataToSend)
-        });
-
-        // Since we're using 'no-cors', we cannot read the actual response
-        // Assume success:
-        setUploadedMessage();
-
-        // Display the success message
-        document.getElementById('successMessage').textContent = 'Data has been successfully exported!';
-        document.getElementById('successMessage').style.display = 'block';
-
-        // Clear the sessionStorage logs if you want to reset
-        sessionStorage.removeItem('scoreLogs');
-        // Optionally reset scores and the form
-        teamAScore = 0;
-        teamBScore = 0;
-      } catch (error) {
-        // Hide the popup if there's an error
-        hideLoadingPopup();
-        alert('Error exporting data: ' + error.message);
-      }
-    }
   </script>
+  <script defer src="InternalDraftLeague.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/nosleep.js@0.12.0/dist/NoSleep.min.js"></script>
 </body>
 </html>
