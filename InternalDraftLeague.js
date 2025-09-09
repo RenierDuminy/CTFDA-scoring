@@ -982,8 +982,8 @@ class SecondsTimerManager {
         timeRemaining = { total, minutes, seconds };
       } else {
         const total = this.defaultSeconds * 1000;
-        const seconds = 0;
         const minutes = Math.floor(this.defaultSeconds / 60);
+        const seconds = this.defaultSeconds % 60;
         timeRemaining = { total, minutes, seconds };
       }
     }
