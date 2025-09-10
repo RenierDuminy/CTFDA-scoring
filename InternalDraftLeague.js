@@ -7,8 +7,9 @@
 // CONSTANTS AND CONFIGURATION
 // =====================================================
 const CONFIG = {
-  // Local CSV data source (in the same folder as index.html)
-  API_URL: "DemoTeams.csv",
+  // Teams CSV data source (Google Sheets CSV export of team_list sheet)
+  // Ensure the sheet is shared for Anyone with the link (view) to allow CORS.
+  API_URL: "https://docs.google.com/spreadsheets/d/1mhuN_H1C_DZ26r1NQRf4muQwszSd8F9mCfyWF5Iwjjo/export?format=csv&gid=884172048",
   DEFAULT_TIMER_MINUTES: 100,
   LOADING_ANIMATION_INTERVAL: 500,
   BEEP_COUNT: 10,
@@ -1244,22 +1245,19 @@ class ScorekeeperApp {
    */
   async loadTeams() {
     try {
-      // Try to load from cache first
+      // Always fetch latest from API on launch
+      await this.loadTeamsFromAPI();
+    } catch (error) {
+      console.warn('Primary team loading failed, attempting cache:', error);
+      // Fallback to cached teams if available
       const cachedTeams = this.dataManager.getTeamsData();
       if (cachedTeams && Object.keys(cachedTeams).length > 0) {
         this.populateTeamOptions(cachedTeams);
-        
-        // Load fresh data in background
-        this.loadTeamsFromAPI().catch(error => {
-          console.warn('Background team loading failed:', error);
-        });
+        Utils.showNotification('Using cached team list due to network error.', 'info');
       } else {
-        // No cache, load from API
-        await this.loadTeamsFromAPI();
+        Utils.showNotification(`Failed to load teams: ${error.message}`, 'error');
+        this.dataManager.setTeamsData({});
       }
-    } catch (error) {
-      Utils.showNotification(`Failed to load teams: ${error.message}`, 'error');
-      this.dataManager.setTeamsData({});
     }
   }
 
