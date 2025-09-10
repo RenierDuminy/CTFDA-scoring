@@ -501,6 +501,18 @@ class DataManager {
   }
 
   /**
+   * Remove a score log by ID
+   */
+  removeScoreLog(scoreID) {
+    const index = this.scoreLogs.findIndex(log => log.scoreID === scoreID);
+    if (index === -1) return null;
+    const [removed] = this.scoreLogs.splice(index, 1);
+    this.gameState.scoreLogs = this.scoreLogs;
+    this.markDirty();
+    return removed;
+  }
+
+  /**
    * Get current game state
    */
   getGameState() {
@@ -1057,6 +1069,7 @@ class ScorekeeperApp {
     this.handleTeamChange = this.handleTeamChange.bind(this);
     this.handleSaveScore = this.handleSaveScore.bind(this);
     this.handleSubmitScore = this.handleSubmitScore.bind(this);
+    this.handleDeleteScore = this.handleDeleteScore.bind(this);
     this.handleTimerToggle = this.handleTimerToggle.bind(this);
     this.handleTimerReset = this.handleTimerReset.bind(this);
     this.handleSecTimerToggle = this.handleSecTimerToggle.bind(this);
@@ -1382,6 +1395,12 @@ class ScorekeeperApp {
       popupButton.addEventListener('click', this.handleSaveScore);
     }
 
+    // Delete score button (visible in edit mode only)
+    const deleteBtn = document.getElementById('deleteBtn');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', this.handleDeleteScore);
+    }
+
     // Close popup when clicking overlay
     const overlay = document.getElementById('overlay');
     if (overlay) {
@@ -1473,6 +1492,10 @@ class ScorekeeperApp {
     // Set popup content
     if (popupTitle) popupTitle.textContent = 'Add Score';
     if (popupButton) popupButton.value = 'Add Score';
+
+    // Hide delete when adding new
+    const deleteBtn = document.getElementById('deleteBtn');
+    if (deleteBtn) deleteBtn.style.display = 'none';
 
     this.populatePlayerDropdowns(team);
   }
@@ -1691,6 +1714,10 @@ class ScorekeeperApp {
     if (popupTitle) popupTitle.textContent = 'Edit Score';
     if (popupButton) popupButton.value = 'Update Score';
 
+    // Show delete in edit mode
+    const deleteBtn = document.getElementById('deleteBtn');
+    if (deleteBtn) deleteBtn.style.display = 'inline-block';
+
     // Determine team
     const teamAName = document.getElementById('teamA')?.value || '';
     const teamLetter = (logToEdit.Team === teamAName) ? 'A' : 'B';
@@ -1718,8 +1745,67 @@ class ScorekeeperApp {
     
     if (overlay) overlay.style.display = 'none';
     if (popup) popup.style.display = 'none';
-    
+
     this.currentEditID = null;
+  }
+
+  /**
+   * Delete current score (from edit popup)
+   */
+  handleDeleteScore() {
+    const scoreID = this.currentEditID;
+    if (!scoreID) {
+      Utils.showNotification('No score selected to delete.', 'error');
+      return;
+    }
+
+    // Remove from data manager
+    const removed = this.dataManager.removeScoreLog(scoreID);
+    if (!removed) {
+      Utils.showNotification('Could not delete score. Try again.', 'error');
+      return;
+    }
+
+    // Remove row from DOM
+    const row = document.querySelector(`tr[data-score-id="${scoreID}"]`);
+    if (row && row.parentElement) {
+      row.parentElement.removeChild(row);
+    }
+
+    // Rebuild table and counters from remaining logs
+    this.rebuildTableAndCounters();
+
+    this.closePopup();
+    this.autoSave();
+    Utils.showNotification('Score deleted.', 'success');
+  }
+
+  /**
+   * Rebuild the scoring table and scoreboard counters from logs
+   */
+  rebuildTableAndCounters() {
+    const scoringTableBody = document.getElementById('scoringTableBody');
+    if (!scoringTableBody) return;
+
+    // Reset counters
+    this.teamAScore = 0;
+    this.teamBScore = 0;
+
+    // Clear table
+    scoringTableBody.innerHTML = '';
+
+    // Re-add rows in order, updating counters per log
+    const teamAName = document.getElementById('teamA')?.value || '';
+    this.dataManager.scoreLogs.forEach((logEntry, idx) => {
+      const teamLetter = (logEntry.Team === teamAName) ? 'A' : 'B';
+      if (teamLetter === 'A') this.teamAScore++;
+      else this.teamBScore++;
+      const row = this.createScoreRow(logEntry, idx);
+      scoringTableBody.appendChild(row);
+    });
+
+    // Ensure ABBA column matches
+    this.updateAbbaColumn();
   }
 
   /**
