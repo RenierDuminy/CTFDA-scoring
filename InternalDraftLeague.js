@@ -7,9 +7,9 @@
 // CONSTANTS AND CONFIGURATION
 // =====================================================
 const CONFIG = {
-  // Teams CSV data source (Google Sheets CSV export of team_list sheet)
-  // Ensure the sheet is shared for Anyone with the link (view) to allow CORS.
+
   API_URL: "https://docs.google.com/spreadsheets/d/1mhuN_H1C_DZ26r1NQRf4muQwszSd8F9mCfyWF5Iwjjo/export?format=csv&gid=884172048",
+  SUBMIT_URL: "https://script.google.com/macros/s/AKfycbzFIR36V3v_L1OppUTNGBiicJSSCUtO7EUNcLgj3oYoP7k3uIzMLqffAwW_sT2W87fF/exec",
   DEFAULT_TIMER_MINUTES: 100,
   LOADING_ANIMATION_INTERVAL: 500,
   BEEP_COUNT: 10,
@@ -544,19 +544,20 @@ class DataManager {
 // =====================================================
 class ApiManager {
   constructor() {
-    this.baseUrl = CONFIG.API_URL;
+    this.teamsUrl = CONFIG.API_URL;
+    this.submitUrl = CONFIG.SUBMIT_URL;
   }
 
   async fetchTeams() {
     try {
-      const response = await fetch(this.baseUrl, { cache: 'no-cache' });
+      const response = await fetch(this.teamsUrl, { cache: 'no-cache' });
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
 
       // Try to parse as JSON first in case API_URL points to JSON
       const contentType = response.headers.get('Content-Type') || '';
-      const isLikelyJson = contentType.includes('application/json') || this.baseUrl.endsWith('.json');
+      const isLikelyJson = contentType.includes('application/json') || this.teamsUrl.endsWith('.json');
 
       if (isLikelyJson) {
         const data = await response.json();
@@ -576,7 +577,12 @@ class ApiManager {
 
   async submitScores(dataToSend) {
     try {
-      const response = await fetch(this.baseUrl, {
+      if (!this.submitUrl) {
+        console.warn('SUBMIT_URL is not configured; skipping export.');
+        return false;
+      }
+
+      const response = await fetch(this.submitUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: {
@@ -585,6 +591,7 @@ class ApiManager {
         body: JSON.stringify(dataToSend)
       });
 
+      // With no-cors we can't read response; assume success
       return true;
     } catch (error) {
       console.error("Error submitting scores:", error);
@@ -1854,6 +1861,7 @@ class ScorekeeperApp {
     const teamAName = document.getElementById('teamA')?.value || '';
     const teamBName = document.getElementById('teamB')?.value || '';
     const gameID = `${teamAName} vs ${teamBName}`;
+    const dateStr = new Date().toLocaleDateString();
     // Build CSV content from logs
     const header = ['GameID', 'Time', 'Team', 'Score', 'Assist'];
     const lines = [Utils.toCSVLine(header)];
@@ -1870,10 +1878,36 @@ class ScorekeeperApp {
     const csv = lines.join('\r\n');
     const filename = `${Utils.sanitizeFilename(gameID || 'Game')}.csv`;
 
-    // Trigger download
-    Utils.downloadTextFile(filename, csv);
+    // Build export payload for Google Apps Script doPost
+    const payload = {
+      GameID: gameID,
+      Date: dateStr,
+      logs: scoreLogs.map((log) => ({
+        GameID: log.GameID || gameID,
+        Time: log.Time || '',
+        Team: log.Team || '',
+        Score: log.Score || '',
+        Assist: log.Assist || ''
+      }))
+    };
 
-    // Clear logs and table after download
+    // Try to export to Google Sheets (if SUBMIT_URL configured)
+    try {
+      this.loadingManager.start();
+      const ok = await this.apiManager.submitScores(payload);
+      if (ok) {
+        Utils.showNotification('Data has been successfully exported to Google Sheets!', 'success');
+      }
+    } catch (err) {
+      Utils.showNotification(`Export to Google Sheets failed: ${err.message}`, 'error');
+    } finally {
+      this.loadingManager.stop();
+    }
+
+    // Always download CSV locally as well
+    Utils.downloadTextFile(filename, csv);
+    
+    // Clear logs and table after actions
     this.dataManager.clearScoreLogs();
     const scoringTableBody = document.getElementById('scoringTableBody');
     if (scoringTableBody) scoringTableBody.innerHTML = '';
