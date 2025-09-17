@@ -12,8 +12,6 @@ const CONFIG = {
   SUBMIT_URL: "https://script.google.com/macros/s/AKfycbzFIR36V3v_L1OppUTNGBiicJSSCUtO7EUNcLgj3oYoP7k3uIzMLqffAwW_sT2W87fF/exec",
   DEFAULT_TIMER_MINUTES: 100,
   LOADING_ANIMATION_INTERVAL: 500,
-  BEEP_COUNT: 10,
-  BEEP_INTERVAL: 1000,
   AUTO_SAVE_INTERVAL: 2000, // Auto-save every 2 seconds
   STORAGE_KEYS: {
     SCORE_LOGS: 'scoreLogs',
@@ -22,10 +20,6 @@ const CONFIG = {
     GAME_STATE: 'gameState',
     TEAMS_DATA: 'teamsData',
     LAST_SAVE: 'lastSave'
-  },
-  
-  AUDIO_FILES: {
-    BEEP: 'REMOVED_FUNCTION'
   }
 };
 
@@ -601,45 +595,10 @@ class ApiManager {
 }
 
 // =====================================================
-// AUDIO MANAGER - Same as before
-// =====================================================
-class AudioManager {
-  constructor() {
-    this.audioCache = new Map();
-  }
-
-  async playAudio(audioFile) {
-    try {
-      let audio = this.audioCache.get(audioFile);
-      
-      if (!audio) {
-        audio = new Audio(audioFile);
-        this.audioCache.set(audioFile, audio);
-      }
-
-      audio.currentTime = 0;
-      await audio.play();
-    } catch (error) {
-      console.warn(`Could not play audio ${audioFile}:`, error);
-    }
-  }
-
-  async playBeepSequence(count = CONFIG.BEEP_COUNT, interval = CONFIG.BEEP_INTERVAL) {
-    for (let i = 0; i < count; i++) {
-      await this.playAudio(CONFIG.AUDIO_FILES.BEEP);
-      if (i < count - 1) {
-        await new Promise(resolve => setTimeout(resolve, interval));
-      }
-    }
-  }
-}
-
-// =====================================================
 // REVAMPED TIMER MANAGER - Simple countdown from future date
 // =====================================================
 class TimerManager {
-  constructor(audioManager, persistenceManager) {
-    this.audioManager = audioManager;
+  constructor(persistenceManager) {
     this.persistenceManager = persistenceManager;
     this.timerInterval = null;
     this.isRunning = false;
@@ -647,22 +606,9 @@ class TimerManager {
     this.remainingTimeMs = null; // Store remaining time when paused
     this.defaultMinutes = CONFIG.DEFAULT_TIMER_MINUTES;
     
-    this.preloadAudio();
     this.loadTimerState();
   }
 
-  preloadAudio() {
-    // Preload the beep audio file
-    try {
-      const audio = new Audio(CONFIG.AUDIO_FILES.BEEP);
-      audio.preload = 'auto';
-      audio.load();
-      // Cache it in the audio manager
-      this.audioManager.audioCache.set(CONFIG.AUDIO_FILES.BEEP, audio);
-    } catch (error) {
-      console.warn('Failed to preload timer beep audio:', error);
-    }
-  }
 
   /**
    * Get time remaining until endTime
@@ -704,7 +650,6 @@ class TimerManager {
         // Timer expired while away
         this.stop();
         this.updateDisplay();
-        this.audioManager.playBeepSequence();
       } else {
         // Resume timer
         this.start();
@@ -819,7 +764,6 @@ class TimerManager {
       const timeRemaining = this.getTimeRemaining(this.endTime);
       if (timeRemaining.total <= 0 && this.isRunning) {
         this.stop();
-        this.audioManager.playBeepSequence();
       }
     }, 1000);
 
@@ -858,9 +802,7 @@ class TimerManager {
   toggle() {
     if (this.isRunning) {
       this.stop();
-      this.audioManager.playAudio(CONFIG.AUDIO_FILES.BEEP);
     } else {
-      this.audioManager.playAudio(CONFIG.AUDIO_FILES.BEEP);
       this.start();
     }
   }
@@ -915,8 +857,7 @@ class TimerManager {
 // SECONDS TIMER MANAGER - Simple second-based countdown
 // =====================================================
 class SecondsTimerManager {
-  constructor(audioManager) {
-    this.audioManager = audioManager;
+  constructor() {
     this.timerInterval = null;
     this.isRunning = false;
     this.endTime = null;
@@ -973,7 +914,6 @@ class SecondsTimerManager {
     if (timeRemaining.total <= 0) {
       this.stop();
       this.remainingTimeMs = 0;
-      this.audioManager.playBeepSequence(3, 300);
     }
   }
 
@@ -1060,10 +1000,9 @@ class ScorekeeperApp {
     this.persistenceManager = new PersistenceManager();
     this.dataManager = new DataManager(this.persistenceManager);
     this.apiManager = new ApiManager();
-    this.audioManager = new AudioManager();
     this.loadingManager = new LoadingManager();
-    this.timerManager = new TimerManager(this.audioManager, this.persistenceManager);
-    this.secondsTimer = new SecondsTimerManager(this.audioManager);
+    this.timerManager = new TimerManager(this.persistenceManager);
+    this.secondsTimer = new SecondsTimerManager();
     
     // Application state
     this.teamAScore = 0;
@@ -1909,8 +1848,17 @@ class ScorekeeperApp {
     
     // Clear logs and table after actions
     this.dataManager.clearScoreLogs();
-    const scoringTableBody = document.getElementById('scoringTableBody');
-    if (scoringTableBody) scoringTableBody.innerHTML = '';
+    this.rebuildTableAndCounters();
+    this.currentEditID = null;
+
+    this.dataManager.updateGameState({
+      teamAScore: 0,
+      teamBScore: 0,
+      scoreLogs: [],
+      timestamp: Date.now()
+    });
+    this.dataManager.saveCurrentState();
+
     Utils.showNotification(`CSV downloaded: ${filename}`, 'success');
   }
 }
