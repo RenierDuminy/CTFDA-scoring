@@ -22,7 +22,7 @@
       <input type="hidden" id="time" name="time">
 
       <div class="setup-controls">
-        <button type="button" class="main-button taller-button" id="openSetupBtn">Setup</button>
+        <button type="button" class="main-button taller-button" id="openSetupBtn">Match Setup</button>
       </div>
 
       <div class="teams-display" id="teamsDisplay">A vs B</div>
@@ -38,7 +38,6 @@
           </td>
           
           <td class="timer-right">
-            <button type="button" class="main-button taller-button" id="resetBtn">Reset</button>
             <button type="button" class="main-button taller-button PausePlay-button" id="playPauseBtn">Play</button>
           </td>
         </tr>
@@ -52,37 +51,19 @@
           </td>
           
           <td class="timer-right">
-            <button type="button" class="main-button taller-button" id="resetSecBtn">Reset</button>
+            <div class="timer-subtext">Reset (hold)</div>
             <button type="button" class="main-button taller-button PausePlay-button" id="playPauseSecBtn">Play</button>
           </td>
         </tr>
       </table>
 
-      <div class="timeout-controls">
-        <div class="timeout-team">
-          <button type="button" class="main-button taller-button timeout-button" id="timeoutTeamA">Timeout A</button>
-          <div class="timeout-remaining">
-            <span>Remaining (total): <strong id="timeoutARemainingTotal">0</strong></span>
-            <span>Remaining (half): <strong id="timeoutARemainingHalf">0</strong></span>
-          </div>
-        </div>
-        <div class="timeout-team">
-          <button type="button" class="main-button taller-button timeout-button" id="timeoutTeamB">Timeout B</button>
-          <div class="timeout-remaining">
-            <span>Remaining (total): <strong id="timeoutBRemainingTotal">0</strong></span>
-            <span>Remaining (half): <strong id="timeoutBRemainingHalf">0</strong></span>
-          </div>
-        </div>
-        <div class="timeout-half">
-          <button type="button" class="main-button taller-button halftime-button" id="halfTimeBtn">Half Time</button>
-        </div>
+      <div class="time-additions-trigger">
+        <button type="button" class="main-button taller-button" id="openTimePopupBtn" disabled>Additional time options</button>
       </div>
-       
-
       <!-- Scoring Table -->
       <table id="scoringTable">
         <tr>
-          <th class="abba-col"><span class="abba-label">ABBA</span><select id="abbaStart"><option value="M">M</option><option value="F">F</option><option value="NONE">None</option></select></th>
+          <th class="abba-col"><span class="abba-label">ABBA</span><span id="abbaDisplay" class="abba-value">-</span></th>
           <th class="score-col">Score A</th>
           <th class="assist-col">Assist A</th>
           <th class="total-col">Total</th>
@@ -176,6 +157,42 @@
     <input type="button" id="popupButton" value="Add Score">
     <input type="button" id="deleteBtn" value="Delete" style="display:none; margin-left: 8px; background-color: #c0392b; color: #fff;">
   </div>
+
+  <!-- Time additions popup -->
+  <div class="overlay" id="timeOverlay" style="display: none;"></div>
+  <div class="popup" id="timePopup" style="display: none;">
+    <button
+      type="button"
+      id="closeTimePopupBtn"
+      style="float: right; background: none; border: none; font-size: 32px; cursor: pointer;">
+      &times;
+    </button>
+    <h3>Time additions</h3>
+    <div class="timeout-controls">
+      <div class="timeout-half">
+        <button type="button" class="main-button taller-button halftime-button" id="halfTimeBtn">Half Time</button>
+      </div>
+      <div class="timeout-row">
+        <div class="timeout-team">
+          <button type="button" class="main-button taller-button timeout-button" id="timeoutTeamA">Timeout A</button>
+          <div class="timeout-remaining">
+            <span>Remaining (total): <strong id="timeoutARemainingTotal">0</strong></span>
+            <span>Remaining (half): <strong id="timeoutARemainingHalf">0</strong></span>
+          </div>
+        </div>
+        <div class="timeout-team">
+          <button type="button" class="main-button taller-button timeout-button" id="timeoutTeamB">Timeout B</button>
+          <div class="timeout-remaining">
+            <span>Remaining (total): <strong id="timeoutBRemainingTotal">0</strong></span>
+            <span>Remaining (half): <strong id="timeoutBRemainingHalf">0</strong></span>
+          </div>
+        </div>
+      </div>
+      <div class="stoppage-control">
+        <button type="button" class="main-button taller-button stoppage-button" id="stoppageToggleBtn">GAME STOPPAGE</button>
+      </div>
+    </div>
+  </div>
   
   <!-- Initial loading popup -->
   <div class="overlay" id="loadingOverlay" style="display: none;"></div>
@@ -249,7 +266,6 @@
       return '';
     });
   </script>
-  <script defer src="InternalDraftLeague.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/nosleep.js@0.12.0/dist/NoSleep.min.js"></script>
+  <script defer src="scripts.js"></script>
 </body>
 </html>
