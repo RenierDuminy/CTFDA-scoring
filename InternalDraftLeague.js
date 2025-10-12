@@ -269,7 +269,18 @@ class PersistenceManager {
       teamAPlayers: '',
       teamBPlayers: '',
       gameTime: '',
+      matchDuration: CONFIG.DEFAULT_TIMER_MINUTES,
+      halftimeDuration: 55,
+      timeoutDuration: 90,
+      timeoutsTotal: 3,
+      timeoutsPerHalf: 2,
+      abbaStart: 'M',
+      timeoutState: {
+        A: { totalRemaining: 3, halfRemaining: 2 },
+        B: { totalRemaining: 3, halfRemaining: 2 }
+      },
       scoreLogs: [],
+      matchStarted: false,
       timestamp: Date.now()
     };
 
@@ -525,7 +536,18 @@ class DataManager {
       teamAPlayers: '',
       teamBPlayers: '',
       gameTime: '',
+      matchDuration: CONFIG.DEFAULT_TIMER_MINUTES,
+      halftimeDuration: 55,
+      timeoutDuration: 90,
+      timeoutsTotal: 3,
+      timeoutsPerHalf: 2,
+      abbaStart: 'M',
+      timeoutState: {
+        A: { totalRemaining: 3, halfRemaining: 2 },
+        B: { totalRemaining: 3, halfRemaining: 2 }
+      },
       scoreLogs: [],
+      matchStarted: false,
       timestamp: Date.now()
     };
     this.scoreLogs = [];
@@ -1003,6 +1025,25 @@ class ScorekeeperApp {
     this.loadingManager = new LoadingManager();
     this.timerManager = new TimerManager(this.persistenceManager);
     this.secondsTimer = new SecondsTimerManager();
+
+    this.gameSettings = {
+      matchDuration: CONFIG.DEFAULT_TIMER_MINUTES,
+      halftimeDuration: 55,
+      timeoutDuration: 90,
+      timeoutsTotal: 3,
+      timeoutsPerHalf: 2
+    };
+
+    this.timeoutState = {
+      A: {
+        totalRemaining: this.gameSettings.timeoutsTotal,
+        halfRemaining: this.gameSettings.timeoutsPerHalf
+      },
+      B: {
+        totalRemaining: this.gameSettings.timeoutsTotal,
+        halfRemaining: this.gameSettings.timeoutsPerHalf
+      }
+    };
     
     // Application state
     this.teamAScore = 0;
@@ -1010,6 +1051,10 @@ class ScorekeeperApp {
     this.currentEditID = null;
     this.isRestoring = false;
     this.abbaStart = 'M';
+    this.matchStarted = false;
+
+    this.timerManager.defaultMinutes = this.gameSettings.matchDuration;
+    this.secondsTimer.defaultSeconds = this.gameSettings.timeoutDuration;
     
     // Bind methods
     this.handleTeamChange = this.handleTeamChange.bind(this);
@@ -1022,9 +1067,14 @@ class ScorekeeperApp {
     this.handleSecTimerReset = this.handleSecTimerReset.bind(this);
     this.openPopup = this.openPopup.bind(this);
     this.closePopup = this.closePopup.bind(this);
+    this.openSetupPopup = this.openSetupPopup.bind(this);
+    this.closeSetupPopup = this.closeSetupPopup.bind(this);
+    this.handleSetupSave = this.handleSetupSave.bind(this);
     this.autoSave = this.autoSave.bind(this);
     this.handleBeforeUnload = this.handleBeforeUnload.bind(this);
     this.handleAbbaChange = this.handleAbbaChange.bind(this);
+    this.startMatch = this.startMatch.bind(this);
+    this.handleHalftime = this.handleHalftime.bind(this);
   }
 
   /**
@@ -1038,11 +1088,23 @@ class ScorekeeperApp {
       // Start auto-save
       this.persistenceManager.startAutoSave(this.autoSave);
       
-      // Check if we need to restore state
-      await this.checkAndRestoreState();
-      
-      // Load teams data (from cache or API)
-      await this.loadTeams();
+      // Show initial popups while data loads
+      this.showLoadingPopup();
+
+      let initializationError = null;
+      try {
+        // Check if we need to restore state
+        await this.checkAndRestoreState();
+        
+        // Load teams data (from cache or API)
+        await this.loadTeams();
+      } catch (error) {
+        initializationError = error;
+      } finally {
+        this.finishInitialLoading();
+      }
+
+      this.initializeTimeoutState(this.dataManager.getGameState()?.timeoutState);
 
       // Initialize ABBA selector
       const abbaSelect = document.getElementById('abbaStart');
@@ -1053,6 +1115,13 @@ class ScorekeeperApp {
       
       // Setup event listeners
       this.setupEventListeners();
+      this.updateTeamsDisplay();
+
+      this.applyGameSettingsToUI();
+      this.setAbbaVisibility(this.abbaStart !== 'NONE');
+      const setupAbbaSelect = document.getElementById('setupAbba');
+      if (setupAbbaSelect) setupAbbaSelect.value = this.abbaStart;
+      this.updateMatchControls();
       
       // Set up page visibility handler for mobile
       document.addEventListener('visibilitychange', () => {
@@ -1061,6 +1130,10 @@ class ScorekeeperApp {
         }
       });
       
+      if (initializationError) {
+        throw initializationError;
+      }
+
       Utils.showNotification('Application initialized successfully', 'success');
     } catch (error) {
       Utils.showNotification(`Failed to initialize application: ${error.message}`, 'error');
@@ -1087,6 +1160,24 @@ class ScorekeeperApp {
         Utils.showNotification('Previous session restored successfully', 'success');
       } else {
         this.dataManager.resetGameState();
+        this.gameSettings = {
+          matchDuration: CONFIG.DEFAULT_TIMER_MINUTES,
+          halftimeDuration: 55,
+          timeoutDuration: 90,
+          timeoutsTotal: 3,
+          timeoutsPerHalf: 2
+        };
+        this.applyGameSettingsToUI();
+        this.abbaStart = 'M';
+        const abbaSelect = document.getElementById('abbaStart');
+        if (abbaSelect) {
+          abbaSelect.value = this.abbaStart;
+        }
+        this.setAbbaVisibility(true);
+        this.clearAbbaCells();
+        this.updateTeamsDisplay();
+        this.matchStarted = false;
+        this.updateMatchControls();
       }
       
       this.isRestoring = false;
@@ -1100,6 +1191,10 @@ class ScorekeeperApp {
     // Restore scores
     this.teamAScore = gameState.teamAScore || 0;
     this.teamBScore = gameState.teamBScore || 0;
+    const storedMatchStarted = typeof gameState.matchStarted === 'boolean' ? gameState.matchStarted : null;
+    this.matchStarted = storedMatchStarted !== null
+      ? storedMatchStarted
+      : Array.isArray(gameState.scoreLogs) && gameState.scoreLogs.length > 0;
     
     // Restore team selections
     const teamASelect = document.getElementById('teamA');
@@ -1134,13 +1229,34 @@ class ScorekeeperApp {
       this.rebuildScoreTable(gameState.scoreLogs);
     }
 
+    const numberOr = (value, fallback) => (typeof value === 'number' && !Number.isNaN(value) ? value : fallback);
+    this.gameSettings.matchDuration = numberOr(gameState.matchDuration, CONFIG.DEFAULT_TIMER_MINUTES);
+    this.gameSettings.halftimeDuration = numberOr(gameState.halftimeDuration, 55);
+    this.gameSettings.timeoutDuration = numberOr(gameState.timeoutDuration, 90);
+    this.gameSettings.timeoutsTotal = numberOr(gameState.timeoutsTotal, 3);
+    this.gameSettings.timeoutsPerHalf = numberOr(gameState.timeoutsPerHalf, 2);
+    this.applyGameSettingsToUI();
+
     // Restore ABBA start if present
     const abbaSelect = document.getElementById('abbaStart');
-    if (abbaSelect && gameState.abbaStart) {
-      this.abbaStart = gameState.abbaStart === 'F' ? 'F' : 'M';
-      abbaSelect.value = this.abbaStart;
-      this.updateAbbaColumn();
+    const storedAbba = gameState.abbaStart;
+    if (storedAbba) {
+      this.abbaStart = storedAbba === 'F' || storedAbba === 'NONE' ? storedAbba : 'M';
+    } else {
+      this.abbaStart = 'M';
     }
+    if (abbaSelect) {
+      abbaSelect.value = this.abbaStart;
+    }
+    this.setAbbaVisibility(this.abbaStart !== 'NONE');
+    if (this.abbaStart !== 'NONE') {
+      this.updateAbbaColumn();
+    } else {
+      this.clearAbbaCells();
+    }
+
+    this.updateTeamsDisplay();
+    this.updateMatchControls();
   }
 
   /**
@@ -1149,15 +1265,30 @@ class ScorekeeperApp {
   rebuildScoreTable(scoreLogs) {
     const scoringTableBody = document.getElementById('scoringTableBody');
     if (!scoringTableBody) return;
-    
-    // Clear existing rows
+
+    this.teamAScore = 0;
+    this.teamBScore = 0;
     scoringTableBody.innerHTML = '';
-    
-    // Add each score log to table
-    scoreLogs.forEach((logEntry, idx) => {
-      const row = this.createScoreRow(logEntry, idx);
+
+    const logs = Array.isArray(scoreLogs) ? scoreLogs : this.dataManager.scoreLogs;
+    let scoringIndex = 0;
+
+    logs.forEach((logEntry) => {
+      const type = logEntry.Type || 'score';
+      let abbaIndex = null;
+      if (type === 'score') {
+        const teamLetter = this.getTeamLetterFromLog(logEntry);
+        if (teamLetter === 'A') this.teamAScore++;
+        else if (teamLetter === 'B') this.teamBScore++;
+        abbaIndex = scoringIndex;
+        scoringIndex++;
+      }
+      const row = this.createScoreRow(logEntry, abbaIndex);
       scoringTableBody.appendChild(row);
     });
+
+    this.updateAbbaColumn();
+    this.setAbbaVisibility(this.abbaStart !== 'NONE');
   }
 
   /**
@@ -1177,6 +1308,13 @@ class ScorekeeperApp {
       gameTime: document.getElementById('time')?.value || '',
       scoreLogs: this.dataManager.scoreLogs,
       abbaStart: document.getElementById('abbaStart')?.value || this.abbaStart,
+      matchDuration: this.gameSettings.matchDuration,
+      halftimeDuration: this.gameSettings.halftimeDuration,
+      timeoutDuration: this.gameSettings.timeoutDuration,
+      timeoutsTotal: this.gameSettings.timeoutsTotal,
+      timeoutsPerHalf: this.gameSettings.timeoutsPerHalf,
+      timeoutState: this.getTimeoutStateSnapshot(),
+      matchStarted: this.matchStarted,
       timestamp: Date.now()
     };
     
@@ -1260,6 +1398,8 @@ class ScorekeeperApp {
     // Restore previous selections
     if (currentTeamA) teamASelect.value = currentTeamA;
     if (currentTeamB) teamBSelect.value = currentTeamB;
+
+    this.updateTeamsDisplay();
   }
 
   /**
@@ -1313,15 +1453,47 @@ class ScorekeeperApp {
       resetSecBtn.addEventListener('click', this.handleSecTimerReset);
     }
 
+    const startMatchBtn = document.getElementById('startMatchBtn');
+    if (startMatchBtn) {
+      startMatchBtn.addEventListener('click', this.startMatch);
+    }
+
+    // Timeout controls
+    const timeoutBtnA = document.getElementById('timeoutTeamA');
+    const timeoutBtnB = document.getElementById('timeoutTeamB');
+    if (timeoutBtnA) {
+      timeoutBtnA.addEventListener('click', () => this.handleTimeout('A'));
+    }
+    if (timeoutBtnB) {
+      timeoutBtnB.addEventListener('click', () => this.handleTimeout('B'));
+    }
+
+    const halfTimeBtn = document.getElementById('halfTimeBtn');
+    if (halfTimeBtn) {
+      halfTimeBtn.addEventListener('click', this.handleHalftime);
+    }
+
     // Score buttons
     const addScoreTeamA = document.getElementById('addScoreTeamA');
     const addScoreTeamB = document.getElementById('addScoreTeamB');
     
     if (addScoreTeamA) {
-      addScoreTeamA.addEventListener('click', () => this.openPopup('A'));
+      addScoreTeamA.addEventListener('click', () => {
+        if (!this.matchStarted) {
+          Utils.showNotification('Start the match before adding scores.', 'error');
+          return;
+        }
+        this.openPopup('A');
+      });
     }
     if (addScoreTeamB) {
-      addScoreTeamB.addEventListener('click', () => this.openPopup('B'));
+      addScoreTeamB.addEventListener('click', () => {
+        if (!this.matchStarted) {
+          Utils.showNotification('Start the match before adding scores.', 'error');
+          return;
+        }
+        this.openPopup('B');
+      });
     }
 
     // Submit button
@@ -1353,6 +1525,27 @@ class ScorekeeperApp {
       overlay.addEventListener('click', this.closePopup);
     }
 
+    // Setup popup controls
+    const openSetupBtn = document.getElementById('openSetupBtn');
+    if (openSetupBtn) {
+      openSetupBtn.addEventListener('click', this.openSetupPopup);
+    }
+
+    const closeSetupBtn = document.getElementById('closeSetupPopupBtn');
+    if (closeSetupBtn) {
+      closeSetupBtn.addEventListener('click', this.closeSetupPopup);
+    }
+
+    const saveSetupBtn = document.getElementById('saveSetupBtn');
+    if (saveSetupBtn) {
+      saveSetupBtn.addEventListener('click', this.handleSetupSave);
+    }
+
+    const setupOverlay = document.getElementById('setupOverlay');
+    if (setupOverlay) {
+      setupOverlay.addEventListener('click', this.closeSetupPopup);
+    }
+
     // ABBA selector
     const abbaSelect = document.getElementById('abbaStart');
     if (abbaSelect) {
@@ -1360,13 +1553,130 @@ class ScorekeeperApp {
     }
   }
 
+  updateMatchControls() {
+    const startBtn = document.getElementById('startMatchBtn');
+    const addButtons = document.querySelectorAll('.add-score-button .add-score');
+    if (this.matchStarted) {
+      if (startBtn) startBtn.classList.add('hidden');
+      addButtons.forEach((btn) => btn.classList.remove('hidden'));
+    } else {
+      if (startBtn) startBtn.classList.remove('hidden');
+      addButtons.forEach((btn) => btn.classList.add('hidden'));
+    }
+  }
+
+  startMatch() {
+    if (this.matchStarted) {
+      return;
+    }
+    this.matchStarted = true;
+    this.updateMatchControls();
+    this.recordSpecialEvent('matchstart');
+    Utils.showNotification('Match started. Score buttons unlocked.', 'info');
+    this.autoSave();
+  }
+
+  handleHalftime() {
+    if (!this.matchStarted) {
+      Utils.showNotification('Start the match before recording halftime.', 'error');
+      return;
+    }
+
+    const defaultHalf = this.gameSettings.timeoutsPerHalf;
+    ['A', 'B'].forEach((teamKey) => {
+      if (this.timeoutState?.[teamKey]) {
+        const totalRemaining = this.timeoutState[teamKey].totalRemaining;
+        this.timeoutState[teamKey].halfRemaining = Math.min(defaultHalf, totalRemaining);
+      }
+    });
+    this.updateTimeoutUI();
+
+    this.recordSpecialEvent('halftime');
+    Utils.showNotification('Halftime recorded.', 'info');
+  }
+
+  recordSpecialEvent(type, teamLetter = null) {
+    let displayLabel;
+    switch (type) {
+      case 'timeout':
+        displayLabel = 'TO';
+        break;
+      case 'halftime':
+        displayLabel = 'HT';
+        break;
+      case 'matchstart':
+        displayLabel = 'MatchStart';
+        break;
+      default:
+        displayLabel = (type || '').toString().toUpperCase();
+        break;
+    }
+
+    const scoreID = Date.now().toString();
+    const overrides = {
+      Type: type,
+      Event: displayLabel,
+      Score: '',
+      Assist: ''
+    };
+    if (!teamLetter) {
+      overrides.Team = displayLabel;
+      overrides.TeamName = displayLabel;
+      overrides.TeamLetter = '';
+    }
+    const logEntry = this.createLogObject(scoreID, teamLetter, '', '', overrides);
+
+    this.dataManager.addScoreLog(logEntry);
+    this.addScoreToTable(logEntry);
+    this.updateAbbaColumn();
+    this.autoSave();
+  }
+
+  getTeamLetterFromLog(logEntry) {
+    if (!logEntry) return '';
+    if (logEntry.TeamLetter) return logEntry.TeamLetter;
+
+    const candidate = logEntry.TeamName || logEntry.Team || '';
+    const teamAName = document.getElementById('teamA')?.value || '';
+    const teamBName = document.getElementById('teamB')?.value || '';
+
+    if (candidate === teamAName) return 'A';
+    if (candidate === teamBName) return 'B';
+    return '';
+  }
+
+  getAbbaIndexForLog(logEntry) {
+    if (!logEntry || (logEntry.Type || 'score') !== 'score') {
+      return null;
+    }
+
+    let index = 0;
+    for (const entry of this.dataManager.scoreLogs) {
+      if ((entry.Type || 'score') === 'score') {
+        if (entry.scoreID === logEntry.scoreID) {
+          return index;
+        }
+        index++;
+      }
+    }
+    return null;
+  }
+
   /**
    * ABBA selector changed
    */
   handleAbbaChange() {
     const abbaSelect = document.getElementById('abbaStart');
-    this.abbaStart = abbaSelect?.value === 'F' ? 'F' : 'M';
-    this.updateAbbaColumn();
+    const selected = abbaSelect?.value || 'M';
+    this.abbaStart = selected;
+    this.setAbbaVisibility(selected !== 'NONE');
+    if (selected !== 'NONE') {
+      this.updateAbbaColumn();
+    } else {
+      this.clearAbbaCells();
+    }
+    const setupAbba = document.getElementById('setupAbba');
+    if (setupAbba) setupAbba.value = this.abbaStart;
     this.autoSave();
   }
 
@@ -1374,12 +1684,52 @@ class ScorekeeperApp {
    * Recompute ABBA column values for all rows
    */
   updateAbbaColumn() {
+    if (this.abbaStart === 'NONE') {
+      this.clearAbbaCells();
+      return;
+    }
+    this.setAbbaVisibility(true);
     const tbody = document.getElementById('scoringTableBody');
     if (!tbody) return;
     const rows = Array.from(tbody.querySelectorAll('tr'));
-    rows.forEach((row, idx) => {
+    let scoringIndex = 0;
+    rows.forEach((row) => {
       const abbaCell = row.cells?.[0];
-      if (abbaCell) abbaCell.textContent = this.computeAbbaForIndex(idx);
+      if (!abbaCell) return;
+      const scoreId = row.getAttribute('data-score-id');
+      const logEntry = this.dataManager.getScoreLog(scoreId);
+      if (logEntry && (logEntry.Type || 'score') === 'score') {
+        abbaCell.textContent = this.computeAbbaForIndex(scoringIndex);
+        scoringIndex++;
+      } else {
+        abbaCell.textContent = '';
+      }
+    });
+  }
+
+  /**
+   * Hide or show the ABBA column based on setting
+   */
+  setAbbaVisibility(shouldShow) {
+    const scoringTable = document.getElementById('scoringTable');
+    if (!scoringTable) return;
+    if (shouldShow) {
+      scoringTable.classList.remove('abba-hidden');
+    } else {
+      scoringTable.classList.add('abba-hidden');
+    }
+  }
+
+  /**
+   * Clear all ABBA cells when the column is disabled
+   */
+  clearAbbaCells() {
+    const tbody = document.getElementById('scoringTableBody');
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.forEach((row) => {
+      const abbaCell = row.cells?.[0];
+      if (abbaCell) abbaCell.textContent = '';
     });
   }
 
@@ -1388,6 +1738,7 @@ class ScorekeeperApp {
    * Pattern: start,start,other,other,repeat
    */
   computeAbbaForIndex(index) {
+    if (this.abbaStart === 'NONE') return '';
     const start = this.abbaStart === 'F' ? 'F' : 'M';
     const other = start === 'M' ? 'F' : 'M';
     // First point is a single occurrence of start (index 0)
@@ -1402,25 +1753,146 @@ class ScorekeeperApp {
    * Handle team selection change
    */
   handleTeamChange(teamID) {
-    const selectedTeam = document.getElementById(teamID)?.value;
+    const selectedTeam = document.getElementById(teamID)?.value || '';
     const playerListElement = document.getElementById(`${teamID}List`);
     
-    if (!selectedTeam || !playerListElement) return;
+    if (playerListElement) {
+      if (!selectedTeam) {
+        playerListElement.value = '';
+      } else {
+        const teamsData = this.dataManager.getTeamsData();
+        const players = teamsData[selectedTeam] || [];
+        playerListElement.value = players.join('\n');
+      }
+      
+      // Auto-resize textarea
+      playerListElement.style.height = 'auto';
+      playerListElement.style.height = playerListElement.scrollHeight + 'px';
+    }
 
-    const teamsData = this.dataManager.getTeamsData();
-    const players = teamsData[selectedTeam] || [];
+    this.updateTeamsDisplay();
+  }
 
-    playerListElement.value = players.join('\n');
-    
-    // Auto-resize textarea
-    playerListElement.style.height = 'auto';
-    playerListElement.style.height = playerListElement.scrollHeight + 'px';
+  /**
+   * Update the on-page team matchup display
+   */
+  updateTeamsDisplay() {
+    const display = document.getElementById('teamsDisplay');
+    if (!display) return;
+
+    const teamAName = (document.getElementById('teamA')?.value || '').trim();
+    const teamBName = (document.getElementById('teamB')?.value || '').trim();
+
+    const left = teamAName || 'A';
+    const right = teamBName || 'B';
+
+    display.textContent = `${left} vs ${right}`;
+  }
+
+  /**
+   * Initialize or restore timeout counts
+   */
+  initializeTimeoutState(savedState = null) {
+    const defaultTotal = this.gameSettings.timeoutsTotal;
+    const defaultHalf = this.gameSettings.timeoutsPerHalf;
+
+    const clampCount = (value, fallback, max) => {
+      if (typeof value !== 'number' || Number.isNaN(value) || value < 0) {
+        return fallback;
+      }
+      const upperBound = typeof max === 'number' ? max : fallback;
+      return Math.min(value, upperBound);
+    };
+
+    const createState = (teamKey) => {
+      const source = savedState?.[teamKey];
+      return {
+        totalRemaining: clampCount(source?.totalRemaining, defaultTotal, defaultTotal),
+        halfRemaining: clampCount(source?.halfRemaining, defaultHalf, defaultHalf)
+      };
+    };
+
+    this.timeoutState = {
+      A: createState('A'),
+      B: createState('B')
+    };
+
+    this.updateTimeoutUI();
+  }
+
+  /**
+   * Snapshot helper to avoid direct references when saving
+   */
+  getTimeoutStateSnapshot() {
+    const makeCopy = (teamKey) => {
+      const source = this.timeoutState?.[teamKey] || {};
+      return {
+        totalRemaining: source.totalRemaining ?? this.gameSettings.timeoutsTotal,
+        halfRemaining: source.halfRemaining ?? this.gameSettings.timeoutsPerHalf
+      };
+    };
+
+    return {
+      A: makeCopy('A'),
+      B: makeCopy('B')
+    };
+  }
+
+  /**
+   * Update timeout counters in the UI
+   */
+  updateTimeoutUI() {
+    const state = this.getTimeoutStateSnapshot();
+    const setText = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    };
+
+    setText('timeoutARemainingTotal', state.A.totalRemaining);
+    setText('timeoutARemainingHalf', state.A.halfRemaining);
+    setText('timeoutBRemainingTotal', state.B.totalRemaining);
+    setText('timeoutBRemainingHalf', state.B.halfRemaining);
+  }
+
+  /**
+   * Handle timeout usage for a team
+   */
+  handleTimeout(team) {
+    if (!this.matchStarted) {
+      Utils.showNotification('Start the match before logging a timeout.', 'error');
+      return;
+    }
+    if (!this.timeoutState?.[team]) return;
+
+    const teamName = team === 'A' ? 'Team A' : 'Team B';
+    const state = this.timeoutState[team];
+
+    if (state.totalRemaining <= 0) {
+      Utils.showNotification(`${teamName} has no timeouts remaining.`, 'error');
+      return;
+    }
+
+    if (state.halfRemaining <= 0) {
+      Utils.showNotification(`${teamName} has no timeouts remaining for this half.`, 'error');
+      return;
+    }
+
+    state.totalRemaining = Math.max(0, state.totalRemaining - 1);
+    state.halfRemaining = Math.max(0, state.halfRemaining - 1);
+
+    this.updateTimeoutUI();
+    this.recordSpecialEvent('timeout', team);
+    Utils.showNotification(`Timeout recorded for ${teamName}.`, 'info');
   }
 
   /**
    * Open score popup
    */
   openPopup(team) {
+    if (!this.matchStarted) {
+      Utils.showNotification('Start the match before adding scores.', 'error');
+      return;
+    }
     this.currentEditID = null;
 
     const overlay = document.getElementById('overlay');
@@ -1546,20 +2018,26 @@ class ScorekeeperApp {
   /**
    * Create log object
    */
-  createLogObject(scoreID, teamLetter, scorer, assist) {
+  createLogObject(scoreID, teamLetter, scorer, assist, overrides = {}) {
     const teamAName = document.getElementById('teamA')?.value || '';
     const teamBName = document.getElementById('teamB')?.value || '';
     const gameID = `${teamAName} vs ${teamBName}`;
     const teamName = (teamLetter === 'A') ? teamAName : teamBName;
 
-    return {
-      scoreID: scoreID,
+    const baseLog = {
+      scoreID,
       GameID: gameID,
       Time: new Date().toLocaleString(),
       Team: teamName,
+      TeamName: teamName,
+      TeamLetter: teamLetter || '',
       Score: scorer,
-      Assist: assist
+      Assist: assist,
+      Type: 'score',
+      Event: ''
     };
+
+    return { ...baseLog, ...overrides };
   }
 
   /**
@@ -1569,23 +2047,77 @@ class ScorekeeperApp {
     const scoringTableBody = document.getElementById('scoringTableBody');
     if (!scoringTableBody) return;
 
-    const currentIndex = scoringTableBody.querySelectorAll('tr').length;
-    const row = this.createScoreRow(logEntry, currentIndex);
+    const abbaIndex = this.getAbbaIndexForLog(logEntry);
+    const row = this.createScoreRow(logEntry, abbaIndex);
     scoringTableBody.appendChild(row);
   }
 
   /**
    * Create score table row
    */
-  createScoreRow(logEntry, index = 0) {
-    const teamAName = document.getElementById('teamA')?.value || '';
-    const teamLetter = (logEntry.Team === teamAName) ? 'A' : 'B';
+  createScoreRow(logEntry, abbaIndex = null) {
+    const teamLetter = this.getTeamLetterFromLog(logEntry);
     const row = document.createElement('tr');
 
     row.setAttribute('data-score-id', logEntry.scoreID);
 
     const scoreboard = `${this.teamAScore}:${this.teamBScore}`;
-    const abba = this.computeAbbaForIndex(index);
+    const type = logEntry.Type || 'score';
+    const eventLabel = logEntry.Event || '';
+    const abba = (type === 'score' && abbaIndex !== null)
+      ? this.computeAbbaForIndex(abbaIndex)
+      : '';
+
+    if (type === 'timeout') {
+      row.classList.add('event-row');
+      const label = eventLabel || 'TO';
+      if (teamLetter === 'A') {
+        row.innerHTML = `
+        <td class="abba-cell">${abba}</td>
+        <td colspan="2" class="event-cell">${label}</td>
+        <td class="total">${scoreboard}</td>
+        <td></td>
+        <td></td>
+        <td></td>
+      `;
+      } else {
+        row.innerHTML = `
+        <td class="abba-cell">${abba}</td>
+        <td></td>
+        <td></td>
+        <td class="total">${scoreboard}</td>
+        <td colspan="2" class="event-cell">${label}</td>
+        <td></td>
+      `;
+      }
+      return row;
+    }
+
+    if (type === 'halftime') {
+      row.classList.add('event-row');
+      const label = eventLabel || 'HT';
+      row.innerHTML = `
+        <td class="abba-cell">${abba}</td>
+        <td colspan="2" class="event-cell">${label}</td>
+        <td class="total">${scoreboard}</td>
+        <td colspan="2" class="event-cell">${label}</td>
+        <td></td>
+      `;
+      return row;
+    }
+
+    if (type === 'matchstart') {
+      row.classList.add('event-row');
+      const label = eventLabel || 'MatchStart';
+      row.innerHTML = `
+        <td class="abba-cell">${abba}</td>
+        <td colspan="2" class="event-cell">${label}</td>
+        <td class="total">${scoreboard}</td>
+        <td colspan="2" class="event-cell">${label}</td>
+        <td></td>
+      `;
+      return row;
+    }
 
     if (teamLetter === 'A') {
       row.innerHTML = `
@@ -1696,6 +2228,198 @@ class ScorekeeperApp {
   }
 
   /**
+   * Show the initial loading popup
+   */
+  showLoadingPopup() {
+    const overlay = document.getElementById('loadingOverlay');
+    const popup = document.getElementById('loadingPopup');
+
+    if (overlay) overlay.style.display = 'block';
+    if (popup) popup.style.display = 'block';
+  }
+
+  /**
+   * Hide the initial loading popup
+   */
+  hideLoadingPopup() {
+    const overlay = document.getElementById('loadingOverlay');
+    const popup = document.getElementById('loadingPopup');
+
+    if (overlay) overlay.style.display = 'none';
+    if (popup) popup.style.display = 'none';
+  }
+
+  /**
+   * Close any popups shown during initial load
+   */
+  finishInitialLoading() {
+    this.closePopup();
+    this.hideLoadingPopup();
+  }
+
+  /**
+   * Show setup popup with current settings
+   */
+  openSetupPopup() {
+    this.populateSetupForm();
+
+    const overlay = document.getElementById('setupOverlay');
+    const popup = document.getElementById('setupPopup');
+
+    if (overlay) overlay.style.display = 'block';
+    if (popup) popup.style.display = 'block';
+  }
+
+  /**
+   * Close setup popup
+   */
+  closeSetupPopup() {
+    const overlay = document.getElementById('setupOverlay');
+    const popup = document.getElementById('setupPopup');
+
+    if (overlay) overlay.style.display = 'none';
+    if (popup) popup.style.display = 'none';
+  }
+
+  /**
+   * Populate setup form fields with current values
+   */
+  populateSetupForm() {
+    const matchInput = document.getElementById('setupMatchDuration');
+    if (matchInput) matchInput.value = this.gameSettings.matchDuration;
+
+    const timeoutInput = document.getElementById('setupTimeoutDuration');
+    if (timeoutInput) timeoutInput.value = this.gameSettings.timeoutDuration;
+
+    const timeoutsTotalInput = document.getElementById('setupTimeoutsTotal');
+    if (timeoutsTotalInput) timeoutsTotalInput.value = this.gameSettings.timeoutsTotal;
+
+    const timeoutsPerHalfInput = document.getElementById('setupTimeoutsPerHalf');
+    if (timeoutsPerHalfInput) timeoutsPerHalfInput.value = this.gameSettings.timeoutsPerHalf;
+
+    const halftimeInput = document.getElementById('setupHalftime');
+    if (halftimeInput) halftimeInput.value = this.gameSettings.halftimeDuration;
+
+    const setupAbba = document.getElementById('setupAbba');
+    if (setupAbba) setupAbba.value = this.abbaStart || 'M';
+  }
+
+  /**
+   * Apply settings entered in the setup popup
+   */
+  handleSetupSave() {
+    const clampNumber = (value, fallback, min, max) => {
+      const parsed = parseInt(value, 10);
+      if (Number.isNaN(parsed)) return fallback;
+      const clamped = Math.max(min, Math.min(max, parsed));
+      return clamped;
+    };
+
+    const newMatchDuration = clampNumber(
+      document.getElementById('setupMatchDuration')?.value,
+      this.gameSettings.matchDuration,
+      1,
+      300
+    );
+    const newHalftimeDuration = clampNumber(
+      document.getElementById('setupHalftime')?.value,
+      this.gameSettings.halftimeDuration,
+      1,
+      newMatchDuration
+    );
+    const newTimeoutDuration = clampNumber(
+      document.getElementById('setupTimeoutDuration')?.value,
+      this.gameSettings.timeoutDuration,
+      1,
+      3600
+    );
+    const newTimeoutsTotal = clampNumber(
+      document.getElementById('setupTimeoutsTotal')?.value,
+      this.gameSettings.timeoutsTotal,
+      0,
+      10
+    );
+    let newTimeoutsPerHalf = clampNumber(
+      document.getElementById('setupTimeoutsPerHalf')?.value,
+      this.gameSettings.timeoutsPerHalf,
+      0,
+      10
+    );
+    newTimeoutsPerHalf = Math.min(newTimeoutsPerHalf, newTimeoutsTotal);
+
+    const abbaSelection = document.getElementById('setupAbba')?.value || this.abbaStart || 'M';
+
+    this.gameSettings = {
+      matchDuration: newMatchDuration,
+      halftimeDuration: newHalftimeDuration,
+      timeoutDuration: newTimeoutDuration,
+      timeoutsTotal: newTimeoutsTotal,
+      timeoutsPerHalf: newTimeoutsPerHalf
+    };
+
+    this.initializeTimeoutState();
+    this.applyGameSettingsToUI();
+
+    const abbaSelect = document.getElementById('abbaStart');
+    this.abbaStart = abbaSelection;
+    if (abbaSelect) {
+      abbaSelect.value = this.abbaStart;
+    }
+    const setupAbbaSelect = document.getElementById('setupAbba');
+    if (setupAbbaSelect) {
+      setupAbbaSelect.value = this.abbaStart;
+    }
+    this.setAbbaVisibility(this.abbaStart !== 'NONE');
+    if (this.abbaStart !== 'NONE') {
+      this.updateAbbaColumn();
+    } else {
+      this.clearAbbaCells();
+    }
+
+    const matchInput = document.getElementById('setupMatchDuration');
+    if (matchInput) matchInput.value = this.gameSettings.matchDuration;
+    const timeoutInput = document.getElementById('setupTimeoutDuration');
+    if (timeoutInput) timeoutInput.value = this.gameSettings.timeoutDuration;
+    const totalInput = document.getElementById('setupTimeoutsTotal');
+    if (totalInput) totalInput.value = this.gameSettings.timeoutsTotal;
+    const perHalfInput = document.getElementById('setupTimeoutsPerHalf');
+    if (perHalfInput) perHalfInput.value = this.gameSettings.timeoutsPerHalf;
+    const halftimeInput = document.getElementById('setupHalftime');
+    if (halftimeInput) halftimeInput.value = this.gameSettings.halftimeDuration;
+
+    this.updateTeamsDisplay();
+    this.autoSave();
+    this.closeSetupPopup();
+    Utils.showNotification('Setup updated.', 'success');
+  }
+
+  /**
+   * Sync timer inputs and defaults with current settings
+   */
+  applyGameSettingsToUI() {
+    this.timerManager.defaultMinutes = this.gameSettings.matchDuration;
+    this.secondsTimer.defaultSeconds = this.gameSettings.timeoutDuration;
+
+    const countdownTimeInput = document.getElementById('countdownTime');
+    if (countdownTimeInput) countdownTimeInput.value = this.gameSettings.matchDuration;
+
+    const countdownTimeSecInput = document.getElementById('countdownTimeSec');
+    if (countdownTimeSecInput) countdownTimeSecInput.value = this.gameSettings.timeoutDuration;
+
+    const halftimeInput = document.getElementById('setupHalftime');
+    if (halftimeInput) halftimeInput.value = this.gameSettings.halftimeDuration;
+
+    if (typeof this.timerManager.updateDisplay === 'function') {
+      this.timerManager.updateDisplay();
+    }
+    if (typeof this.secondsTimer.updateDisplay === 'function') {
+      this.secondsTimer.updateDisplay();
+    }
+
+    this.updateTimeoutUI();
+  }
+
+  /**
    * Delete current score (from edit popup)
    */
   handleDeleteScore() {
@@ -1741,17 +2465,24 @@ class ScorekeeperApp {
     scoringTableBody.innerHTML = '';
 
     // Re-add rows in order, updating counters per log
-    const teamAName = document.getElementById('teamA')?.value || '';
-    this.dataManager.scoreLogs.forEach((logEntry, idx) => {
-      const teamLetter = (logEntry.Team === teamAName) ? 'A' : 'B';
-      if (teamLetter === 'A') this.teamAScore++;
-      else this.teamBScore++;
-      const row = this.createScoreRow(logEntry, idx);
+    let scoringIndex = 0;
+    this.dataManager.scoreLogs.forEach((logEntry) => {
+      const type = logEntry.Type || 'score';
+      let abbaIndex = null;
+      if (type === 'score') {
+        const teamLetter = this.getTeamLetterFromLog(logEntry);
+        if (teamLetter === 'A') this.teamAScore++;
+        else if (teamLetter === 'B') this.teamBScore++;
+        abbaIndex = scoringIndex;
+        scoringIndex++;
+      }
+      const row = this.createScoreRow(logEntry, abbaIndex);
       scoringTableBody.appendChild(row);
     });
 
     // Ensure ABBA column matches
     this.updateAbbaColumn();
+    this.setAbbaVisibility(this.abbaStart !== 'NONE');
   }
 
   /**
@@ -1851,10 +2582,15 @@ class ScorekeeperApp {
     this.rebuildTableAndCounters();
     this.currentEditID = null;
 
+    this.initializeTimeoutState();
+    this.matchStarted = false;
+    this.updateMatchControls();
     this.dataManager.updateGameState({
       teamAScore: 0,
       teamBScore: 0,
       scoreLogs: [],
+      timeoutState: this.getTimeoutStateSnapshot(),
+      matchStarted: this.matchStarted,
       timestamp: Date.now()
     });
     this.dataManager.saveCurrentState();

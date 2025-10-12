@@ -115,6 +115,11 @@ body {
   padding: 0.25rem;
 }
 
+.site-header-title {
+  color: #ffffff;
+  margin: 0;
+}
+
 .header-image {
   height: 4rem;
   max-width: 100%;
@@ -251,27 +256,6 @@ input[type="button"]:hover,
   padding: 2em 0 2em;
 }
 
-.home-button {
-  display: center;
-  padding: 0.75rem 3rem;
-  background: var(--color-brand);
-  color: #fff;
-  text-decoration: none;
-  font-weight: 600;
-  border-radius: 6px;
-  white-space: nowrap;
-}
-
-/* On small screens, make home-button full width and adjust padding */
-@media (max-width: 400px) {
-  .home-button {
-    width: 75%;
-    text-align: center;
-    padding: 0.75rem 0;
-    white-space: normal;
-  }
-}
-
 /* Add score button layout */
 .add-score-button {
   display: flex;
@@ -323,6 +307,114 @@ input[type="button"]:hover,
   height: 100%;
   background: rgba(0, 0, 0, 0.7);
 }
+
+#loadingOverlay {
+  z-index: 150;
+}
+
+#loadingPopup {
+  z-index: 200;
+  max-width: 320px;
+  text-align: center;
+  padding: 20px;
+}
+
+#setupOverlay {
+  z-index: 160;
+}
+
+#setupPopup,
+#scorePopup {
+  z-index: 220;
+  max-width: 420px;
+  padding: 20px;
+}
+
+#setupPopup .popup-field {
+  margin-top: 12px;
+}
+
+#setupPopup label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+#setupPopup input,
+#setupPopup select {
+  width: 100%;
+}
+
+#setupPopup .popup-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.setup-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin: 10px 0;
+}
+
+.teams-display {
+  text-align: center;
+  font-weight: 600;
+  margin-bottom: 15px;
+}
+
+.timeout-controls {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  margin: 15px 0;
+  flex-wrap: wrap;
+}
+
+.timeout-team {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.timeout-button {
+  min-width: 160px;
+}
+
+.timeout-remaining {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.9em;
+}
+
+.timeout-half {
+  flex-basis: 100%;
+  display: flex;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+.halftime-button {
+  min-width: 200px;
+}
+
+.event-cell {
+  text-transform: uppercase;
+  font-weight: 600;
+  text-align: center;
+}
+
+.event-row {
+  background-color: rgba(47, 42, 133, 0.08);
+}
+
+#scoringTable.abba-hidden th.abba-col,
+#scoringTable.abba-hidden td.abba-cell {
+  display: none;
+}
+
 
 .popup select,
 .popup input[type="button"] {
