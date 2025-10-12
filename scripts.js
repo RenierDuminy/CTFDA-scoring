@@ -2478,6 +2478,13 @@ class ScorekeeperApp {
     state.halfRemaining = Math.max(0, state.halfRemaining - 1);
 
     this.updateTimeoutUI();
+    if (this.secondsTimer && typeof this.secondsTimer.reset === 'function') {
+      const defaultSeconds = this.gameSettings.timeoutDuration || this.secondsTimer.defaultSeconds;
+      this.secondsTimer.reset(defaultSeconds);
+      if (typeof this.secondsTimer.start === 'function') {
+        this.secondsTimer.start();
+      }
+    }
     this.recordSpecialEvent('timeout', team);
     Utils.showNotification(`Timeout recorded for ${teamName}.`, 'info');
   }
