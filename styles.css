@@ -457,7 +457,27 @@ input[type="button"]:hover,
 }
 
 .event-row {
-  background-color: rgba(47, 42, 133, 0.08);
+  background-color: rgba(47, 42, 133, 0.06);
+  color: var(--color-brand);
+}
+
+.event-row td {
+  background-color: transparent;
+}
+
+.event-row.event-timeout-row {
+  background-color: rgba(210, 247, 196, 0.5);
+  color: var(--color-brand);
+}
+
+.event-row.halftime-row {
+  background-color: rgba(46, 137, 31, 0.4);
+  color: #ffffff;
+}
+
+.event-row.stoppage-row {
+  background-color: #ffccd1;
+  color: #8a1f2b;
 }
 
 #scoringTable.abba-hidden th.abba-col,
@@ -539,6 +559,78 @@ input[type="button"]:hover,
   }
   body {
     padding: 0.5rem;
+  }
+}
+
+@media (max-width: 600px) {
+  body {
+    font-size: 16px;
+    padding: clamp(0.5rem, 3vw, 1rem);
+  }
+
+  .form-container {
+    width: 100%;
+    padding: clamp(0.6rem, 4vw, 0.9rem);
+    border-width: 3px;
+  }
+
+  .site-header {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .timer-table,
+  .timer-table td,
+  .timer-table input {
+    width: 100%;
+  }
+
+  .timer-display,
+  .timer-input {
+    font-size: 1.2rem;
+  }
+
+  .main-button,
+  .timeout-button,
+  .halftime-button,
+  .teams-display {
+    width: 100%;
+  }
+
+  .timeout-button,
+  .halftime-button,
+  .main-button {
+    min-width: 0;
+  }
+
+  .timeout-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .timeout-team {
+    width: 100%;
+  }
+
+  table,
+  th,
+  td {
+    font-size: 0.9rem;
+  }
+
+  #scoringTableBody td,
+  #scoringTableBody th {
+    font-size: 0.85rem;
+  }
+
+  .team-list-container {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  textarea {
+    min-height: 120px;
   }
 }
 

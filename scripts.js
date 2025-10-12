@@ -13,6 +13,7 @@ const CONFIG = {
   DEFAULT_TIMER_MINUTES: 100,
   LOADING_ANIMATION_INTERVAL: 500,
   AUTO_SAVE_INTERVAL: 2000, // Auto-save every 2 seconds
+  HALFTIME_SCORE_TARGET: 8,
   STORAGE_KEYS: {
     SCORE_LOGS: 'scoreLogs',
     TIMER_END_TIME: 'timerEndTime',
@@ -271,7 +272,8 @@ class PersistenceManager {
       gameTime: '',
       matchDuration: CONFIG.DEFAULT_TIMER_MINUTES,
       halftimeDuration: 55,
-      timeoutDuration: 90,
+      halftimeBreakDuration: 7,
+      timeoutDuration: 75,
       timeoutsTotal: 3,
       timeoutsPerHalf: 2,
       abbaStart: 'M',
@@ -539,7 +541,8 @@ class DataManager {
       gameTime: '',
       matchDuration: CONFIG.DEFAULT_TIMER_MINUTES,
       halftimeDuration: 55,
-      timeoutDuration: 90,
+      halftimeBreakDuration: 7,
+      timeoutDuration: 75,
       timeoutsTotal: 3,
       timeoutsPerHalf: 2,
       abbaStart: 'M',
@@ -629,6 +632,7 @@ class TimerManager {
     this.endTime = null;
     this.remainingTimeMs = null; // Store remaining time when paused
     this.defaultMinutes = CONFIG.DEFAULT_TIMER_MINUTES;
+    this.tickCallback = null;
     
     this.loadTimerState();
   }
@@ -786,6 +790,13 @@ class TimerManager {
       this.updateDisplay();
       
       const timeRemaining = this.getTimeRemaining(this.endTime);
+      if (typeof this.tickCallback === 'function') {
+        try {
+          this.tickCallback({ ...timeRemaining });
+        } catch (err) {
+          console.error('Timer tick callback error:', err);
+        }
+      }
       if (timeRemaining.total <= 0 && this.isRunning) {
         this.stop();
       }
@@ -793,6 +804,14 @@ class TimerManager {
 
     // Initial update
     this.updateDisplay();
+    if (typeof this.tickCallback === 'function' && this.endTime) {
+      try {
+        const initialRemaining = this.getTimeRemaining(this.endTime);
+        this.tickCallback({ ...initialRemaining });
+      } catch (err) {
+        console.error('Timer tick callback error:', err);
+      }
+    }
   }
 
   /**
@@ -829,6 +848,10 @@ class TimerManager {
     } else {
       this.start();
     }
+  }
+
+  setTickCallback(callback) {
+    this.tickCallback = (typeof callback === 'function') ? callback : null;
   }
 
   /**
@@ -886,7 +909,7 @@ class SecondsTimerManager {
     this.isRunning = false;
     this.endTime = null;
     this.remainingTimeMs = null;
-    this.defaultSeconds = 90;
+    this.defaultSeconds = 75;
     this.updateDisplay();
   }
 
@@ -1031,7 +1054,8 @@ class ScorekeeperApp {
     this.gameSettings = {
       matchDuration: CONFIG.DEFAULT_TIMER_MINUTES,
       halftimeDuration: 55,
-      timeoutDuration: 90,
+      halftimeBreakDuration: 7,
+      timeoutDuration: 75,
       timeoutsTotal: 3,
       timeoutsPerHalf: 2
     };
@@ -1051,11 +1075,18 @@ class ScorekeeperApp {
     this.teamAScore = 0;
     this.teamBScore = 0;
     this.currentEditID = null;
+    this.currentTimeoutEditID = null;
+    this.currentHalftimeEditID = null;
+    this.halftimeTriggered = false;
+    this.halftimeAutoSuppressed = false;
+    this.halftimePendingReason = null;
     this.isRestoring = false;
     this.abbaStart = 'M';
     this.matchStarted = false;
     this.gameStoppageActive = false;
     this.hardCapReached = false;
+    this.stoppagePausedMainTimer = false;
+    this.stoppagePausedSecondsTimer = false;
 
     this.timerManager.defaultMinutes = this.gameSettings.matchDuration;
     this.secondsTimer.defaultSeconds = this.gameSettings.timeoutDuration;
@@ -1082,6 +1113,15 @@ class ScorekeeperApp {
     this.handleAbbaChange = this.handleAbbaChange.bind(this);
     this.startMatch = this.startMatch.bind(this);
     this.handleHalftime = this.handleHalftime.bind(this);
+    this.openTimeoutEditPopup = this.openTimeoutEditPopup.bind(this);
+    this.closeTimeoutEditPopup = this.closeTimeoutEditPopup.bind(this);
+    this.handleTimeoutEditSave = this.handleTimeoutEditSave.bind(this);
+    this.openHalftimeEditPopup = this.openHalftimeEditPopup.bind(this);
+    this.closeHalftimeEditPopup = this.closeHalftimeEditPopup.bind(this);
+    this.handleHalftimeDelete = this.handleHalftimeDelete.bind(this);
+    this.handleMainTimerTick = this.handleMainTimerTick.bind(this);
+
+    this.timerManager.setTickCallback(this.handleMainTimerTick);
   }
 
   /**
@@ -1165,7 +1205,8 @@ class ScorekeeperApp {
         this.gameSettings = {
           matchDuration: CONFIG.DEFAULT_TIMER_MINUTES,
           halftimeDuration: 55,
-          timeoutDuration: 90,
+          halftimeBreakDuration: 7,
+          timeoutDuration: 75,
           timeoutsTotal: 3,
           timeoutsPerHalf: 2
         };
@@ -1197,6 +1238,7 @@ class ScorekeeperApp {
     this.matchStarted = storedMatchStarted !== null
       ? storedMatchStarted
       : Array.isArray(gameState.scoreLogs) && gameState.scoreLogs.length > 0;
+    this.halftimeAutoSuppressed = false;
     
     // Restore team selections
     const teamASelect = document.getElementById('teamA');
@@ -1234,7 +1276,8 @@ class ScorekeeperApp {
     const numberOr = (value, fallback) => (typeof value === 'number' && !Number.isNaN(value) ? value : fallback);
     this.gameSettings.matchDuration = numberOr(gameState.matchDuration, CONFIG.DEFAULT_TIMER_MINUTES);
     this.gameSettings.halftimeDuration = numberOr(gameState.halftimeDuration, 55);
-    this.gameSettings.timeoutDuration = numberOr(gameState.timeoutDuration, 90);
+    this.gameSettings.halftimeBreakDuration = numberOr(gameState.halftimeBreakDuration, 7);
+    this.gameSettings.timeoutDuration = numberOr(gameState.timeoutDuration, 75);
     this.gameSettings.timeoutsTotal = numberOr(gameState.timeoutsTotal, 3);
     this.gameSettings.timeoutsPerHalf = numberOr(gameState.timeoutsPerHalf, 2);
     this.applyGameSettingsToUI();
@@ -1262,6 +1305,10 @@ class ScorekeeperApp {
     this.updateTeamsDisplay();
     this.updateMatchControls();
     this.checkForScoreCap({ silent: true });
+    this.updateHalftimeTracking();
+    this.halftimePendingReason = null;
+    this.maybeTriggerHalftimeByScore();
+    this.maybeTriggerHalftimeByTime();
   }
 
   /**
@@ -1279,9 +1326,9 @@ class ScorekeeperApp {
     let scoringIndex = 0;
 
     logs.forEach((logEntry) => {
-      const type = logEntry.Type || 'score';
+      const isScore = this.isScoreLog(logEntry);
       let abbaIndex = null;
-      if (type === 'score') {
+      if (isScore) {
         const teamLetter = this.getTeamLetterFromLog(logEntry);
         if (teamLetter === 'A') this.teamAScore++;
         else if (teamLetter === 'B') this.teamBScore++;
@@ -1295,6 +1342,8 @@ class ScorekeeperApp {
     this.updateAbbaColumn();
     this.setAbbaVisibility(this.abbaStart !== 'NONE');
     this.checkForScoreCap({ silent: true });
+    this.updateHalftimeTracking();
+    this.maybeTriggerHalftimeByScore();
   }
 
   /**
@@ -1317,6 +1366,7 @@ class ScorekeeperApp {
       stoppageActive: this.gameStoppageActive,
       matchDuration: this.gameSettings.matchDuration,
       halftimeDuration: this.gameSettings.halftimeDuration,
+      halftimeBreakDuration: this.gameSettings.halftimeBreakDuration,
       timeoutDuration: this.gameSettings.timeoutDuration,
       timeoutsTotal: this.gameSettings.timeoutsTotal,
       timeoutsPerHalf: this.gameSettings.timeoutsPerHalf,
@@ -1519,6 +1569,33 @@ class ScorekeeperApp {
       overlay.addEventListener('click', this.closePopup);
     }
 
+    // Timeout edit popup controls
+    const timeoutEditOverlay = document.getElementById('timeoutEditOverlay');
+    if (timeoutEditOverlay) {
+      timeoutEditOverlay.addEventListener('click', this.closeTimeoutEditPopup);
+    }
+    const closeTimeoutEditPopupBtn = document.getElementById('closeTimeoutEditPopupBtn');
+    if (closeTimeoutEditPopupBtn) {
+      closeTimeoutEditPopupBtn.addEventListener('click', this.closeTimeoutEditPopup);
+    }
+    const saveTimeoutEditBtn = document.getElementById('saveTimeoutEditBtn');
+    if (saveTimeoutEditBtn) {
+      saveTimeoutEditBtn.addEventListener('click', this.handleTimeoutEditSave);
+    }
+
+    const halftimeEditOverlay = document.getElementById('halftimeEditOverlay');
+    if (halftimeEditOverlay) {
+      halftimeEditOverlay.addEventListener('click', this.closeHalftimeEditPopup);
+    }
+    const closeHalftimeEditPopupBtn = document.getElementById('closeHalftimeEditPopupBtn');
+    if (closeHalftimeEditPopupBtn) {
+      closeHalftimeEditPopupBtn.addEventListener('click', this.closeHalftimeEditPopup);
+    }
+    const deleteHalftimeBtn = document.getElementById('deleteHalftimeBtn');
+    if (deleteHalftimeBtn) {
+      deleteHalftimeBtn.addEventListener('click', this.handleHalftimeDelete);
+    }
+
     // Setup popup controls
     const openSetupBtn = document.getElementById('openSetupBtn');
     if (openSetupBtn) {
@@ -1654,10 +1731,30 @@ class ScorekeeperApp {
     if (this.matchStarted) {
       return;
     }
+    const teamAValue = (document.getElementById('teamA')?.value || '').trim();
+    const teamBValue = (document.getElementById('teamB')?.value || '').trim();
+
+    if (!teamAValue || !teamBValue) {
+      Utils.showNotification('Select both Team A and Team B before starting the match.', 'error');
+      return;
+    }
     if (this.gameStoppageActive) {
       Utils.showNotification('Resolve game stoppage before starting the match.', 'warning');
       return;
     }
+    const countdownInput = document.getElementById('countdownTime');
+    const configuredMinutes = parseInt(countdownInput?.value, 10);
+    const startMinutes = Number.isFinite(configuredMinutes) && configuredMinutes > 0
+      ? configuredMinutes
+      : this.gameSettings.matchDuration;
+
+    this.timerManager.defaultMinutes = startMinutes;
+    this.timerManager.reset(startMinutes);
+
+    this.halftimeTriggered = false;
+    this.currentHalftimeEditID = null;
+    this.halftimePendingReason = null;
+    this.halftimeAutoSuppressed = false;
     this.hardCapReached = false;
     this.matchStarted = true;
     this.timerManager.start();
@@ -1667,10 +1764,29 @@ class ScorekeeperApp {
     this.autoSave();
   }
 
-  handleHalftime() {
+  handleHalftime(arg = null) {
+    let options = {};
+    if (arg && typeof arg === 'object') {
+      if (typeof arg.preventDefault === 'function') {
+        arg.preventDefault();
+      } else {
+        options = arg;
+      }
+    }
+    const { silent = false, reason = 'manual' } = options;
+
+    if (this.halftimeTriggered) {
+      if (!silent) {
+        Utils.showNotification('Halftime has already been recorded.', 'warning');
+      }
+      return false;
+    }
+
     if (!this.matchStarted) {
-      Utils.showNotification('Start the match before recording halftime.', 'error');
-      return;
+      if (!silent) {
+        Utils.showNotification('Start the match before recording halftime.', 'error');
+      }
+      return false;
     }
 
     const defaultHalf = this.gameSettings.timeoutsPerHalf;
@@ -1682,15 +1798,131 @@ class ScorekeeperApp {
     });
     this.updateTimeoutUI();
 
-    this.recordSpecialEvent('halftime');
-    Utils.showNotification('Halftime recorded.', 'info');
+    const halftimeBreakMinutes = this.gameSettings.halftimeBreakDuration || 7;
+    const halftimeBreakSeconds = Math.max(1, halftimeBreakMinutes * 60);
+    if (this.secondsTimer && typeof this.secondsTimer.reset === 'function') {
+      this.secondsTimer.reset(halftimeBreakSeconds);
+      this.secondsTimer.start();
+    }
+
+    const halftimeLog = this.recordSpecialEvent('halftime');
+    this.halftimeTriggered = true;
+    if (halftimeLog && halftimeLog.scoreID) {
+      this.currentHalftimeEditID = halftimeLog.scoreID;
+    }
+    this.updateHalftimeTracking();
+    this.halftimePendingReason = null;
+    this.halftimeAutoSuppressed = false;
+
+    if (!silent) {
+      Utils.showNotification('Halftime recorded.', 'info');
+    }
+    this.autoSave();
+    return true;
+  }
+
+  updateHalftimeTracking() {
+    const halftimeLogs = Array.isArray(this.dataManager.scoreLogs)
+      ? this.dataManager.scoreLogs.filter(log => (log?.Type || '') === 'halftime')
+      : [];
+    const latest = halftimeLogs.length > 0 ? halftimeLogs[halftimeLogs.length - 1] : null;
+    this.halftimeTriggered = Boolean(latest);
+    this.currentHalftimeEditID = latest ? latest.scoreID : null;
+    if (this.halftimeTriggered) {
+      this.halftimePendingReason = null;
+    }
+  }
+
+  maybeTriggerHalftimeByScore() {
+    if (!this.matchStarted || this.halftimeTriggered) {
+      return;
+    }
+    const totalPoints = this.teamAScore + this.teamBScore;
+    if (this.halftimeAutoSuppressed) {
+      if (totalPoints < CONFIG.HALFTIME_SCORE_TARGET) {
+        this.halftimeAutoSuppressed = false;
+      } else {
+        return;
+      }
+    }
+    if (totalPoints >= CONFIG.HALFTIME_SCORE_TARGET) {
+      const triggered = this.handleHalftime({ silent: true, reason: 'score' });
+      if (triggered) {
+        Utils.showNotification(`Halftime reached after ${CONFIG.HALFTIME_SCORE_TARGET} total points.`, 'info');
+      }
+    }
+  }
+
+  maybeTriggerHalftimeByTime(timeRemaining = null) {
+    if (!this.matchStarted || this.halftimeTriggered) {
+      return;
+    }
+    const thresholdMinutes = Math.max(0, this.gameSettings.matchDuration - this.gameSettings.halftimeDuration);
+    if (thresholdMinutes <= 0) {
+      return;
+    }
+    const thresholdMs = thresholdMinutes * 60 * 1000;
+    let remainingMs = null;
+    if (timeRemaining && typeof timeRemaining.total === 'number') {
+      remainingMs = Math.max(0, timeRemaining.total);
+    } else if (this.timerManager && typeof this.timerManager.getRemainingSeconds === 'function') {
+      remainingMs = Math.max(0, this.timerManager.getRemainingSeconds() * 1000);
+    }
+    if (remainingMs === null) {
+      return;
+    }
+    if (this.halftimeAutoSuppressed) {
+      if (remainingMs > thresholdMs) {
+        this.halftimeAutoSuppressed = false;
+      } else {
+        return;
+      }
+    }
+    if (remainingMs <= thresholdMs) {
+      if (this.halftimePendingReason !== 'clock') {
+        this.halftimePendingReason = 'clock';
+        Utils.showNotification('Halftime reached on the game clock. The break will start after the next point.', 'info');
+      }
+    }
+  }
+
+  attemptPendingHalftime() {
+    if (!this.matchStarted || this.halftimeTriggered) return;
+    if (this.halftimePendingReason !== 'clock') return;
+
+    const reason = this.halftimePendingReason;
+    const triggered = this.handleHalftime({ silent: true, reason });
+    if (!triggered) {
+      this.halftimePendingReason = reason;
+      return;
+    }
+    Utils.showNotification('Halftime break started after the latest point.', 'info');
+  }
+
+  handleMainTimerTick(timeRemaining) {
+    this.maybeTriggerHalftimeByTime(timeRemaining);
+  }
+
+  getEventTypeLabel(type) {
+    switch (type) {
+      case 'matchstart':
+        return 'Start';
+      case 'timeout':
+        return 'TimeOut';
+      case 'stoppage':
+        return 'Stoppage';
+      case 'halftime':
+        return 'HalfTime';
+      default:
+        return 'Score';
+    }
   }
 
   recordSpecialEvent(type, teamLetter = null) {
     let displayLabel;
     switch (type) {
       case 'timeout':
-        displayLabel = 'TO';
+        displayLabel = 'Time out';
         break;
       case 'halftime':
         displayLabel = 'HT';
@@ -1711,11 +1943,12 @@ class ScorekeeperApp {
       Type: type,
       Event: displayLabel,
       Score: '',
-      Assist: ''
+      Assist: '',
+      EventType: this.getEventTypeLabel(type)
     };
     if (!teamLetter) {
-      overrides.Team = displayLabel;
-      overrides.TeamName = displayLabel;
+      overrides.Team = '';
+      overrides.TeamName = '';
       overrides.TeamLetter = '';
     }
     const logEntry = this.createLogObject(scoreID, teamLetter, '', '', overrides);
@@ -1726,6 +1959,7 @@ class ScorekeeperApp {
       this.updateAbbaColumn();
     }
     this.autoSave();
+    return logEntry;
   }
 
   checkForScoreCap(options = {}) {
@@ -1752,20 +1986,186 @@ class ScorekeeperApp {
       Utils.showNotification('Game stoppage recorded. Timers paused.', 'warning');
     } else {
       Utils.showNotification('Game stoppage cleared.', 'info');
+      const shouldRestartMain = this.matchStarted && !this.hardCapReached;
+      if (shouldRestartMain && this.timerManager && !this.timerManager.isRunning) {
+        this.timerManager.start();
+      }
+      if (this.secondsTimer && !this.secondsTimer.isRunning && this.stoppagePausedSecondsTimer) {
+        this.secondsTimer.start();
+      }
+      this.stoppagePausedMainTimer = false;
+      this.stoppagePausedSecondsTimer = false;
     }
     this.updateStoppageUI();
     this.autoSave();
   }
 
   pauseAllTimers() {
-    if (this.timerManager && typeof this.timerManager.stop === 'function') {
+    this.stoppagePausedMainTimer = Boolean(this.timerManager && this.timerManager.isRunning);
+    this.stoppagePausedSecondsTimer = Boolean(this.secondsTimer && this.secondsTimer.isRunning);
+
+    if (this.timerManager && typeof this.timerManager.stop === 'function' && this.timerManager.isRunning) {
       this.timerManager.stop();
     }
-    if (this.secondsTimer && typeof this.secondsTimer.stop === 'function') {
+    if (this.secondsTimer && typeof this.secondsTimer.stop === 'function' && this.secondsTimer.isRunning) {
       this.secondsTimer.stop();
     }
   }
 
+  openTimeoutEditPopup(scoreID) {
+    const logEntry = this.dataManager.getScoreLog(scoreID);
+    if (!logEntry || (logEntry.Type || '') !== 'timeout') {
+      Utils.showNotification('Selected entry is not a timeout.', 'error');
+      return;
+    }
+
+    const overlay = document.getElementById('timeoutEditOverlay');
+    const popup = document.getElementById('timeoutEditPopup');
+    const teamSelect = document.getElementById('timeoutEditTeam');
+
+    if (!overlay || !popup || !teamSelect) {
+      Utils.showNotification('Timeout editor is unavailable.', 'error');
+      return;
+    }
+
+    const teamAName = (document.getElementById('teamA')?.value || '').trim();
+    const teamBName = (document.getElementById('teamB')?.value || '').trim();
+    const optionA = teamSelect.querySelector('option[value="A"]');
+    const optionB = teamSelect.querySelector('option[value="B"]');
+    if (optionA) optionA.textContent = teamAName || 'Team A';
+    if (optionB) optionB.textContent = teamBName || 'Team B';
+
+    teamSelect.value = logEntry.TeamLetter || '';
+    this.currentTimeoutEditID = scoreID;
+
+    overlay.style.display = 'block';
+    popup.style.display = 'block';
+  }
+
+  closeTimeoutEditPopup() {
+    const overlay = document.getElementById('timeoutEditOverlay');
+    const popup = document.getElementById('timeoutEditPopup');
+    const teamSelect = document.getElementById('timeoutEditTeam');
+
+    if (overlay) overlay.style.display = 'none';
+    if (popup) popup.style.display = 'none';
+    if (teamSelect) teamSelect.value = '';
+
+    this.currentTimeoutEditID = null;
+  }
+
+  handleTimeoutEditSave() {
+    if (!this.currentTimeoutEditID) {
+      Utils.showNotification('No timeout selected to update.', 'error');
+      return;
+    }
+
+    const existingLog = this.dataManager.getScoreLog(this.currentTimeoutEditID);
+    if (!existingLog || (existingLog.Type || '') !== 'timeout') {
+      Utils.showNotification('Selected entry is not a timeout.', 'error');
+      return;
+    }
+
+    const teamSelect = document.getElementById('timeoutEditTeam');
+    const teamLetter = teamSelect?.value || '';
+    if (!teamLetter) {
+      Utils.showNotification('Select the team that called the timeout.', 'error');
+      return;
+    }
+
+    const teamAName = (document.getElementById('teamA')?.value || '').trim();
+    const teamBName = (document.getElementById('teamB')?.value || '').trim();
+    const teamName = teamLetter === 'A' ? teamAName : teamBName;
+
+    if (!teamName) {
+      Utils.showNotification('Assign Team A and Team B before editing the timeout.', 'error');
+      return;
+    }
+
+    const oldTeamLetter = existingLog.TeamLetter || '';
+
+    const updated = this.dataManager.updateScoreLog(this.currentTimeoutEditID, {
+      TeamLetter: teamLetter,
+      Team: teamName,
+      TeamName: teamName
+    });
+
+    if (!updated) {
+      Utils.showNotification('Failed to update timeout entry.', 'error');
+      return;
+    }
+
+    if (oldTeamLetter !== teamLetter) {
+      this.adjustTimeoutCountsForEdit(oldTeamLetter, teamLetter);
+    }
+
+    this.closeTimeoutEditPopup();
+    this.rebuildTableAndCounters();
+    this.autoSave();
+    Utils.showNotification('Timeout updated.', 'success');
+  }
+
+  openHalftimeEditPopup(scoreID) {
+    const logEntry = this.dataManager.getScoreLog(scoreID);
+    if (!logEntry || (logEntry.Type || '') !== 'halftime') {
+      Utils.showNotification('Selected entry is not a halftime log.', 'error');
+      return;
+    }
+
+    const overlay = document.getElementById('halftimeEditOverlay');
+    const popup = document.getElementById('halftimeEditPopup');
+
+    if (!overlay || !popup) {
+      Utils.showNotification('Halftime editor is unavailable.', 'error');
+      return;
+    }
+
+    this.currentHalftimeEditID = scoreID;
+    overlay.style.display = 'block';
+    popup.style.display = 'block';
+  }
+
+  closeHalftimeEditPopup() {
+    const overlay = document.getElementById('halftimeEditOverlay');
+    const popup = document.getElementById('halftimeEditPopup');
+
+    if (overlay) overlay.style.display = 'none';
+    if (popup) popup.style.display = 'none';
+
+    this.currentHalftimeEditID = null;
+  }
+
+  handleHalftimeDelete() {
+    if (!this.currentHalftimeEditID) {
+      Utils.showNotification('No halftime entry selected to delete.', 'error');
+      return;
+    }
+
+    const scoreID = this.currentHalftimeEditID;
+    const removed = this.dataManager.removeScoreLog(scoreID);
+    if (!removed) {
+      Utils.showNotification('Failed to delete halftime entry.', 'error');
+      return;
+    }
+
+    this.halftimeAutoSuppressed = true;
+    this.halftimePendingReason = null;
+    this.halftimeTriggered = false;
+    this.closeHalftimeEditPopup();
+
+    const row = document.querySelector(`tr[data-score-id="${scoreID}"]`);
+    if (row && row.parentElement) {
+      row.parentElement.removeChild(row);
+    }
+
+    if (this.secondsTimer && typeof this.secondsTimer.reset === 'function') {
+      this.secondsTimer.reset(this.gameSettings.timeoutDuration || this.secondsTimer.defaultSeconds);
+    }
+
+    this.rebuildTableAndCounters();
+    this.autoSave();
+    Utils.showNotification('Halftime entry deleted.', 'success');
+  }
   updateStoppageUI() {
     const stoppageBtn = document.getElementById('stoppageToggleBtn');
     if (stoppageBtn) {
@@ -1787,6 +2187,19 @@ class ScorekeeperApp {
     });
   }
 
+  getLogType(logEntry) {
+    if (!logEntry) return '';
+    const rawType = logEntry.Type;
+    if (typeof rawType === 'string' && rawType.trim().length > 0) {
+      return rawType.trim().toLowerCase();
+    }
+    return 'score';
+  }
+
+  isScoreLog(logEntry) {
+    return this.getLogType(logEntry) === 'score';
+  }
+
   getTeamLetterFromLog(logEntry) {
     if (!logEntry) return '';
     if (logEntry.TeamLetter) return logEntry.TeamLetter;
@@ -1801,13 +2214,13 @@ class ScorekeeperApp {
   }
 
   getAbbaIndexForLog(logEntry) {
-    if (!logEntry || (logEntry.Type || 'score') !== 'score') {
+    if (!this.isScoreLog(logEntry)) {
       return null;
     }
 
     let index = 0;
     for (const entry of this.dataManager.scoreLogs) {
-      if ((entry.Type || 'score') === 'score') {
+      if (this.isScoreLog(entry)) {
         if (entry.scoreID === logEntry.scoreID) {
           return index;
         }
@@ -1857,7 +2270,7 @@ class ScorekeeperApp {
       if (!abbaCell) return;
       const scoreId = row.getAttribute('data-score-id');
       const logEntry = this.dataManager.getScoreLog(scoreId);
-      if (logEntry && (logEntry.Type || 'score') === 'score') {
+      if (this.isScoreLog(logEntry)) {
         abbaCell.textContent = this.computeAbbaForIndex(scoringIndex);
         scoringIndex++;
       } else {
@@ -1950,15 +2363,23 @@ class ScorekeeperApp {
    */
   updateTeamsDisplay() {
     const display = document.getElementById('teamsDisplay');
-    if (!display) return;
-
     const teamAName = (document.getElementById('teamA')?.value || '').trim();
     const teamBName = (document.getElementById('teamB')?.value || '').trim();
 
-    const left = teamAName || 'A';
-    const right = teamBName || 'B';
+    if (display) {
+      const left = teamAName || 'A';
+      const right = teamBName || 'B';
+      display.textContent = `${left} vs ${right}`;
+    }
 
-    display.textContent = `${left} vs ${right}`;
+    const labelA = document.getElementById('timeoutTeamLabelA');
+    if (labelA) {
+      labelA.textContent = teamAName || 'Team A';
+    }
+    const labelB = document.getElementById('timeoutTeamLabelB');
+    if (labelB) {
+      labelB.textContent = teamBName || 'Team B';
+    }
   }
 
   /**
@@ -2059,6 +2480,27 @@ class ScorekeeperApp {
     this.updateTimeoutUI();
     this.recordSpecialEvent('timeout', team);
     Utils.showNotification(`Timeout recorded for ${teamName}.`, 'info');
+  }
+
+  adjustTimeoutCountsForEdit(oldTeam, newTeam) {
+    const normalize = (value, max) => {
+      if (typeof value !== 'number' || Number.isNaN(value)) return 0;
+      return Math.max(0, Math.min(value, max));
+    };
+
+    if (oldTeam && this.timeoutState?.[oldTeam]) {
+      const state = this.timeoutState[oldTeam];
+      state.totalRemaining = normalize(state.totalRemaining + 1, this.gameSettings.timeoutsTotal);
+      state.halfRemaining = normalize(state.halfRemaining + 1, this.gameSettings.timeoutsPerHalf);
+    }
+
+    if (newTeam && this.timeoutState?.[newTeam]) {
+      const state = this.timeoutState[newTeam];
+      state.totalRemaining = normalize(state.totalRemaining - 1, this.gameSettings.timeoutsTotal);
+      state.halfRemaining = normalize(state.halfRemaining - 1, this.gameSettings.timeoutsPerHalf);
+    }
+
+    this.updateTimeoutUI();
   }
 
   /**
@@ -2171,6 +2613,8 @@ class ScorekeeperApp {
 
     // Add to table
     this.addScoreToTable(logEntry);
+    this.maybeTriggerHalftimeByScore();
+    this.attemptPendingHalftime();
     
     this.closePopup();
   }
@@ -2199,7 +2643,12 @@ class ScorekeeperApp {
     const teamAName = document.getElementById('teamA')?.value || '';
     const teamBName = document.getElementById('teamB')?.value || '';
     const gameID = `${teamAName} vs ${teamBName}`;
-    const teamName = (teamLetter === 'A') ? teamAName : teamBName;
+    let teamName = '';
+    if (teamLetter === 'A') {
+      teamName = teamAName;
+    } else if (teamLetter === 'B') {
+      teamName = teamBName;
+    }
 
     const baseLog = {
       scoreID,
@@ -2211,10 +2660,15 @@ class ScorekeeperApp {
       Score: scorer,
       Assist: assist,
       Type: 'score',
-      Event: ''
+      Event: '',
+      EventType: this.getEventTypeLabel('score')
     };
 
-    return { ...baseLog, ...overrides };
+    const mergedLog = { ...baseLog, ...overrides };
+
+    mergedLog.EventType = overrides.EventType ?? this.getEventTypeLabel(mergedLog.Type);
+
+    return mergedLog;
   }
 
   /**
@@ -2235,52 +2689,70 @@ class ScorekeeperApp {
    */
   createScoreRow(logEntry, abbaIndex = null) {
     const teamLetter = this.getTeamLetterFromLog(logEntry);
+    const normalizedTeamLetter = (teamLetter || '').toUpperCase();
     const row = document.createElement('tr');
 
     row.setAttribute('data-score-id', logEntry.scoreID);
 
     const scoreboard = `${this.teamAScore}:${this.teamBScore}`;
-    const type = logEntry.Type || 'score';
+    const type = this.getLogType(logEntry);
+    const isScore = type === 'score';
     const eventLabel = logEntry.Event || '';
-    const abba = (type === 'score' && abbaIndex !== null)
+    const abba = (isScore && abbaIndex !== null)
       ? this.computeAbbaForIndex(abbaIndex)
       : '';
 
     if (type === 'timeout') {
-      row.classList.add('event-row');
-      const label = eventLabel || 'TO';
-      if (teamLetter === 'A') {
+      row.classList.add('event-row', 'event-timeout-row');
+      const label = eventLabel || 'Time out';
+      if (normalizedTeamLetter === 'A') {
         row.innerHTML = `
         <td class="abba-cell">${abba}</td>
         <td colspan="2" class="event-cell">${label}</td>
         <td class="total">${scoreboard}</td>
         <td></td>
         <td></td>
+        <td><button type="button" class="edit-btn timeout-edit-btn">Edit</button></td>
+      `;
+      } else if (normalizedTeamLetter === 'B') {
+        row.innerHTML = `
+        <td class="abba-cell">${abba}</td>
         <td></td>
+        <td></td>
+        <td class="total">${scoreboard}</td>
+        <td colspan="2" class="event-cell">${label}</td>
+        <td><button type="button" class="edit-btn timeout-edit-btn">Edit</button></td>
       `;
       } else {
         row.innerHTML = `
         <td class="abba-cell">${abba}</td>
-        <td></td>
-        <td></td>
+        <td colspan="2" class="event-cell">${label}</td>
         <td class="total">${scoreboard}</td>
         <td colspan="2" class="event-cell">${label}</td>
-        <td></td>
+        <td><button type="button" class="edit-btn timeout-edit-btn">Edit</button></td>
       `;
+      }
+      const editBtn = row.querySelector('.timeout-edit-btn');
+      if (editBtn) {
+        editBtn.addEventListener('click', () => this.openTimeoutEditPopup(logEntry.scoreID));
       }
       return row;
     }
 
     if (type === 'halftime') {
-      row.classList.add('event-row');
+      row.classList.add('event-row', 'halftime-row');
       const label = eventLabel || 'HT';
       row.innerHTML = `
         <td class="abba-cell">${abba}</td>
         <td colspan="2" class="event-cell">${label}</td>
         <td class="total">${scoreboard}</td>
         <td colspan="2" class="event-cell">${label}</td>
-        <td></td>
+        <td><button type="button" class="edit-btn halftime-edit-btn">Edit</button></td>
       `;
+      const editBtn = row.querySelector('.halftime-edit-btn');
+      if (editBtn) {
+        editBtn.addEventListener('click', () => this.openHalftimeEditPopup(logEntry.scoreID));
+      }
       return row;
     }
 
@@ -2289,7 +2761,7 @@ class ScorekeeperApp {
     }
 
     if (type === 'stoppage') {
-      row.classList.add('event-row');
+      row.classList.add('event-row', 'stoppage-row');
       const label = eventLabel || 'STOP';
       row.innerHTML = `
         <td class="abba-cell">${abba}</td>
@@ -2301,7 +2773,7 @@ class ScorekeeperApp {
       return row;
     }
 
-    if (teamLetter === 'A') {
+    if (isScore && teamLetter === 'A') {
       row.innerHTML = `
         <td class=\"abba-cell\">${abba}</td>
         <td>${logEntry.Score}</td>
@@ -2309,18 +2781,20 @@ class ScorekeeperApp {
         <td class="total">${scoreboard}</td>
         <td></td>
         <td></td>
+        <td><button type="button" class="edit-btn">Edit</button></td>
+      `;
+    } else if (isScore) {
+      row.innerHTML = `
+        <td class=\"abba-cell\">${abba}</td>
+        <td></td>
+        <td></td>
+        <td class="total">${scoreboard}</td>
+        <td>${logEntry.Score}</td>
+        <td>${logEntry.Assist}</td>
         <td><button type="button" class="edit-btn">Edit</button></td>
       `;
     } else {
-      row.innerHTML = `
-        <td class=\"abba-cell\">${abba}</td>
-        <td></td>
-        <td></td>
-        <td class="total">${scoreboard}</td>
-        <td>${logEntry.Score}</td>
-        <td>${logEntry.Assist}</td>
-        <td><button type="button" class="edit-btn">Edit</button></td>
-      `;
+      return null;
     }
 
     // Add edit functionality
@@ -2514,6 +2988,9 @@ class ScorekeeperApp {
     const halftimeInput = document.getElementById('setupHalftime');
     if (halftimeInput) halftimeInput.value = this.gameSettings.halftimeDuration;
 
+    const halftimeDurationInput = document.getElementById('setupHalftimeDuration');
+    if (halftimeDurationInput) halftimeDurationInput.value = this.gameSettings.halftimeBreakDuration;
+
     const setupAbba = document.getElementById('setupAbba');
     if (setupAbba) setupAbba.value = this.abbaStart || 'M';
   }
@@ -2561,11 +3038,19 @@ class ScorekeeperApp {
     );
     newTimeoutsPerHalf = Math.min(newTimeoutsPerHalf, newTimeoutsTotal);
 
+    const newHalftimeBreakDuration = clampNumber(
+      document.getElementById('setupHalftimeDuration')?.value,
+      this.gameSettings.halftimeBreakDuration,
+      1,
+      120
+    );
+
     const abbaSelection = document.getElementById('setupAbba')?.value || this.abbaStart || 'M';
 
     this.gameSettings = {
       matchDuration: newMatchDuration,
       halftimeDuration: newHalftimeDuration,
+      halftimeBreakDuration: newHalftimeBreakDuration,
       timeoutDuration: newTimeoutDuration,
       timeoutsTotal: newTimeoutsTotal,
       timeoutsPerHalf: newTimeoutsPerHalf
@@ -2586,11 +3071,15 @@ class ScorekeeperApp {
     if (perHalfInput) perHalfInput.value = this.gameSettings.timeoutsPerHalf;
     const halftimeInput = document.getElementById('setupHalftime');
     if (halftimeInput) halftimeInput.value = this.gameSettings.halftimeDuration;
+    const halftimeDurationInput = document.getElementById('setupHalftimeDuration');
+    if (halftimeDurationInput) halftimeDurationInput.value = this.gameSettings.halftimeBreakDuration;
 
     this.updateTeamsDisplay();
     this.autoSave();
     this.closeSetupPopup();
     Utils.showNotification('Setup updated.', 'success');
+    this.maybeTriggerHalftimeByScore();
+    this.maybeTriggerHalftimeByTime();
   }
 
   /**
@@ -2608,6 +3097,9 @@ class ScorekeeperApp {
 
     const halftimeInput = document.getElementById('setupHalftime');
     if (halftimeInput) halftimeInput.value = this.gameSettings.halftimeDuration;
+
+    const halftimeDurationInput = document.getElementById('setupHalftimeDuration');
+    if (halftimeDurationInput) halftimeDurationInput.value = this.gameSettings.halftimeBreakDuration;
 
     if (typeof this.timerManager.updateDisplay === 'function') {
       this.timerManager.updateDisplay();
@@ -2667,9 +3159,9 @@ class ScorekeeperApp {
     // Re-add rows in order, updating counters per log
     let scoringIndex = 0;
     this.dataManager.scoreLogs.forEach((logEntry) => {
-      const type = logEntry.Type || 'score';
+      const isScore = this.isScoreLog(logEntry);
       let abbaIndex = null;
-      if (type === 'score') {
+      if (isScore) {
         const teamLetter = this.getTeamLetterFromLog(logEntry);
         if (teamLetter === 'A') this.teamAScore++;
         else if (teamLetter === 'B') this.teamBScore++;
@@ -2684,6 +3176,8 @@ class ScorekeeperApp {
     this.updateAbbaColumn();
     this.setAbbaVisibility(this.abbaStart !== 'NONE');
     this.checkForScoreCap({ silent: true });
+    this.updateHalftimeTracking();
+    this.maybeTriggerHalftimeByScore();
   }
 
   /**
@@ -2750,12 +3244,14 @@ class ScorekeeperApp {
     const gameID = `${teamAName} vs ${teamBName}`;
     const dateStr = new Date().toLocaleDateString();
     // Build CSV content from logs
-    const header = ['GameID', 'Time', 'Team', 'Score', 'Assist'];
+    const header = ['GameID', 'Time', 'Event', 'Team', 'Score', 'Assist'];
     const lines = [Utils.toCSVLine(header)];
     scoreLogs.forEach((log) => {
+      const eventType = log.EventType || this.getEventTypeLabel(log.Type);
       lines.push(Utils.toCSVLine([
         log.GameID || gameID,
         log.Time || '',
+        eventType || '',
         log.Team || '',
         log.Score || '',
         log.Assist || ''
@@ -2772,6 +3268,7 @@ class ScorekeeperApp {
       logs: scoreLogs.map((log) => ({
         GameID: log.GameID || gameID,
         Time: log.Time || '',
+        Event: log.EventType || this.getEventTypeLabel(log.Type),
         Team: log.Team || '',
         Score: log.Score || '',
         Assist: log.Assist || ''
@@ -2798,6 +3295,10 @@ class ScorekeeperApp {
     this.dataManager.clearScoreLogs();
     this.rebuildTableAndCounters();
     this.currentEditID = null;
+    this.currentHalftimeEditID = null;
+    this.halftimeTriggered = false;
+    this.halftimePendingReason = null;
+    this.halftimeAutoSuppressed = false;
 
     this.initializeTimeoutState();
     this.matchStarted = false;

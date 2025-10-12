@@ -44,10 +44,10 @@
         <!-- Seconds Timer Row -->
         <tr>
           <td class="timer-left" id="timerColumnSec">
-            <div id="timerDisplaySec" class="timer-display">01:30</div>
+            <div id="timerDisplaySec" class="timer-display">01:15</div>
 
             <label for="countdownTimeSec" class="timer-label">Set Time (sec):</label>
-            <input type="number" id="countdownTimeSec" value="90" min="1" max="3600" class="timer-input">
+            <input type="number" id="countdownTimeSec" value="75" min="1" max="3600" class="timer-input">
           </td>
           
           <td class="timer-right">
@@ -158,6 +158,51 @@
     <input type="button" id="deleteBtn" value="Delete" style="display:none; margin-left: 8px; background-color: #c0392b; color: #fff;">
   </div>
 
+  <!-- Timeout edit popup -->
+  <div class="overlay" id="timeoutEditOverlay" style="display: none;"></div>
+  <div class="popup" id="timeoutEditPopup" style="display: none;">
+    <button
+      type="button"
+      id="closeTimeoutEditPopupBtn"
+      style="float: right; background: none; border: none; font-size: 32px; cursor: pointer;">
+      &times;
+    </button>
+    <h3>Edit Timeout</h3>
+    <div class="popup-field">
+      <label for="timeoutEditTeam">Timeout called by</label>
+      <select id="timeoutEditTeam">
+        <option value="">Select team</option>
+        <option value="A">Team A</option>
+        <option value="B">Team B</option>
+      </select>
+    </div>
+    <div class="popup-actions">
+      <button type="button" class="main-button taller-button" id="saveTimeoutEditBtn">Save</button>
+    </div>
+  </div>
+
+  <!-- Halftime edit popup -->
+  <div class="overlay" id="halftimeEditOverlay" style="display: none;"></div>
+  <div class="popup" id="halftimeEditPopup" style="display: none;">
+    <button
+      type="button"
+      id="closeHalftimeEditPopupBtn"
+      style="float: right; background: none; border: none; font-size: 32px; cursor: pointer;">
+      &times;
+    </button>
+    <h3>Edit Halftime Entry</h3>
+    <p style="margin-bottom: 16px;">Use the delete option below to remove this halftime log.</p>
+    <div class="popup-actions">
+      <button
+        type="button"
+        class="main-button taller-button"
+        id="deleteHalftimeBtn"
+        style="background-color: #c0392b; color: #fff;">
+        Delete
+      </button>
+    </div>
+  </div>
+
   <!-- Time additions popup -->
   <div class="overlay" id="timeOverlay" style="display: none;"></div>
   <div class="popup" id="timePopup" style="display: none;">
@@ -174,6 +219,7 @@
       </div>
       <div class="timeout-row">
         <div class="timeout-team">
+          <div class="timeout-team-label" id="timeoutTeamLabelA">Team A</div>
           <button type="button" class="main-button taller-button timeout-button" id="timeoutTeamA">Timeout A</button>
           <div class="timeout-remaining">
             <span>Remaining (total): <strong id="timeoutARemainingTotal">0</strong></span>
@@ -181,6 +227,7 @@
           </div>
         </div>
         <div class="timeout-team">
+          <div class="timeout-team-label" id="timeoutTeamLabelB">Team B</div>
           <button type="button" class="main-button taller-button timeout-button" id="timeoutTeamB">Timeout B</button>
           <div class="timeout-remaining">
             <span>Remaining (total): <strong id="timeoutBRemainingTotal">0</strong></span>
@@ -224,7 +271,7 @@
       </select>
     </div>
     <div class="popup-field">
-      <label for="setupMatchDuration">Match duration (Soft cap)</label>
+      <label for="setupMatchDuration">Match duration</label>
       <input type="number" id="setupMatchDuration" min="1" max="300" value="100">
     </div>
     <div class="popup-field">
@@ -232,8 +279,12 @@
       <input type="number" id="setupHalftime" min="1" max="300" value="55">
     </div>
     <div class="popup-field">
+      <label for="setupHalftimeDuration">Halftime duration (min)</label>
+      <input type="number" id="setupHalftimeDuration" min="1" max="120" value="7">
+    </div>
+    <div class="popup-field">
       <label for="setupTimeoutDuration">Timeout duration (sec)</label>
-      <input type="number" id="setupTimeoutDuration" min="1" max="3600" value="90">
+      <input type="number" id="setupTimeoutDuration" min="1" max="3600" value="75">
     </div>
     <div class="popup-field">
       <label for="setupTimeoutsTotal">Timeouts total</label>
