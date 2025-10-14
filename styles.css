@@ -332,16 +332,22 @@ input[type="button"]:hover,
 
 #setupPopup .popup-field {
   margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
 }
 
 #setupPopup label {
-  display: block;
-  margin-bottom: 6px;
+  margin-bottom: 0;
+  flex: 1 1 180px;
+  max-width: 50%;
 }
 
 #setupPopup input,
 #setupPopup select {
-  width: 100%;
+  flex: 1 1 160px;
+  min-width: 140px;
 }
 
 #setupPopup .popup-actions {
@@ -508,16 +514,15 @@ input[type="button"]:hover,
 
 .team-list-container {
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
   margin-top: 5px;
 }
 
 .team-list-container > div {
-  flex: 1;
-  margin: 0 10px;
+  width: 100%;
 }
-
 
 
 /* ======================== */
@@ -647,18 +652,109 @@ input[type="button"]:hover,
 /*   Scoring Table Styles   */
 /* ======================== */
 
+/* Scoring table layout */
+#scoringTable {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+#scoringTable th,
+#scoringTable td {
+  padding: 4px 6px;
+}
+
+#scoringTable th {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+#scoringTable td {
+  vertical-align: middle;
+}
+
+#scoringTable td:not(.event-cell):not(.score-cell):not(.assist-cell) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#scoringTable td.score-cell,
+#scoringTable td.assist-cell {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-overflow: clip;
+}
+
+#scoringTable .event-cell {
+  white-space: normal;
+}
+
+/* Column weighting */
+#scoringTable th.abba-col,
+#scoringTable td.abba-cell {
+  width: 8%;
+  font-weight: 700;
+}
+
+#scoringTable th.score-col,
+#scoringTable td:nth-child(2),
+#scoringTable td:nth-child(5) {
+  width: 18%;
+}
+
+#scoringTable th.assist-col,
+#scoringTable td:nth-child(3),
+#scoringTable td:nth-child(6) {
+  width: 18%;
+}
+
+#scoringTable th.total-col,
+#scoringTable td.total {
+  width: 12%;
+  font-weight: 700;
+}
+
+#scoringTable th:last-child,
+#scoringTable td:last-child {
+  width: 8%;
+}
+
+#scoringTable .edit-btn {
+  width: 100%;
+  max-width: 64px;
+  min-height: 24px;
+  padding: 4px;
+  font-size: clamp(0.6rem, 1.5vw, 0.8rem);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#scoringTable .scoring-cell-truncated {
+  text-overflow: ellipsis;
+}
+
+#scoringTable .edit-btn .icon-gear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+#scoringTable .edit-btn .icon-gear::before {
+  content: "\2699";
+}
+
 /* Header weights */
-th.abba-col { font-weight: 700; font-size: calc(1em - 7pt); }
+th.abba-col { font-size: calc(1em - 7pt); }
 th.score-col, th.assist-col { font-weight: 400; }
-th.total-col { font-weight: 700; font-size: calc(1em - 1pt); }
+th.total-col { font-size: calc(1em - 1pt); }
 
 /* Body cells */
 td.abba-cell { font-weight: 500; }
-td.total { font-weight: 700; font-size: calc(1em - 1pt); }
-
-/* Keep ABBA (col 1) as narrow as possible */
-th.abba-col { width: 1%; }
-#scoringTableBody td:nth-child(1) { width: 1%; white-space: nowrap; }
+td.total { font-size: calc(1em - 1pt); }
 
 /* Place ABBA label and value */
 .abba-label { display: block; margin-bottom: 2px; }
@@ -666,11 +762,6 @@ th.abba-col { width: 1%; }
 .abba-value {
   display: block;
   font-weight: 600;
-}
-
-#scoringTable th,
-#scoringTable td {
-  padding: 4px 6px;
 }
 
 

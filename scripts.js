@@ -13,7 +13,7 @@ const CONFIG = {
   DEFAULT_TIMER_MINUTES: 100,
   LOADING_ANIMATION_INTERVAL: 500,
   AUTO_SAVE_INTERVAL: 2000, // Auto-save every 2 seconds
-  HALFTIME_SCORE_TARGET: 8,
+  HALFTIME_SCORE_TARGET: 8, // Trigger halftime once a single team reaches this score
   STORAGE_KEYS: {
     SCORE_LOGS: 'scoreLogs',
     TIMER_END_TIME: 'timerEndTime',
@@ -1087,6 +1087,7 @@ class ScorekeeperApp {
     this.hardCapReached = false;
     this.stoppagePausedMainTimer = false;
     this.stoppagePausedSecondsTimer = false;
+    this.tableResizeFrame = null;
 
     this.timerManager.defaultMinutes = this.gameSettings.matchDuration;
     this.secondsTimer.defaultSeconds = this.gameSettings.timeoutDuration;
@@ -1120,6 +1121,8 @@ class ScorekeeperApp {
     this.closeHalftimeEditPopup = this.closeHalftimeEditPopup.bind(this);
     this.handleHalftimeDelete = this.handleHalftimeDelete.bind(this);
     this.handleMainTimerTick = this.handleMainTimerTick.bind(this);
+    this.adjustScoringTableSizing = this.adjustScoringTableSizing.bind(this);
+    this.handleResize = Utils.debounce(() => this.adjustScoringTableSizing(), 150);
 
     this.timerManager.setTickCallback(this.handleMainTimerTick);
   }
@@ -1164,6 +1167,8 @@ class ScorekeeperApp {
       if (setupAbbaSelect) setupAbbaSelect.value = this.abbaStart;
       this.updateMatchControls();
       this.updateStoppageUI();
+      this.adjustScoringTableSizing();
+      window.addEventListener('resize', this.handleResize);
       
       // Set up page visibility handler for mobile
       document.addEventListener('visibilitychange', () => {
@@ -1344,6 +1349,7 @@ class ScorekeeperApp {
     this.checkForScoreCap({ silent: true });
     this.updateHalftimeTracking();
     this.maybeTriggerHalftimeByScore();
+    this.adjustScoringTableSizing();
   }
 
   /**
@@ -1383,6 +1389,12 @@ class ScorekeeperApp {
    * Handle before page unload
    */
   handleBeforeUnload(event) {
+    window.removeEventListener('resize', this.handleResize);
+    if (this.tableResizeFrame) {
+      cancelAnimationFrame(this.tableResizeFrame);
+      this.tableResizeFrame = null;
+    }
+
     // Perform final save
     this.autoSave();
     
@@ -1644,6 +1656,7 @@ class ScorekeeperApp {
       return;
     }
 
+    const LONG_PRESS_DURATION_MS = 5000;
     let holdTimeout = null;
     let longPressTriggered = false;
     let suppressClick = false;
@@ -1659,12 +1672,15 @@ class ScorekeeperApp {
       if (event?.type === 'mousedown' && event.button !== 0) {
         return;
       }
+      if (event?.type === 'touchstart') {
+        event.preventDefault();
+      }
       longPressTriggered = false;
       clearHold();
       holdTimeout = setTimeout(() => {
         longPressTriggered = true;
         resetCallback();
-      }, 5000);
+      }, LONG_PRESS_DURATION_MS);
     };
 
     const endPress = (event) => {
@@ -1700,6 +1716,9 @@ class ScorekeeperApp {
         return;
       }
       toggleCallback();
+    });
+    button.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
     });
   }
 
@@ -1837,18 +1856,20 @@ class ScorekeeperApp {
     if (!this.matchStarted || this.halftimeTriggered) {
       return;
     }
-    const totalPoints = this.teamAScore + this.teamBScore;
+
+    const leadingScore = Math.max(this.teamAScore || 0, this.teamBScore || 0);
     if (this.halftimeAutoSuppressed) {
-      if (totalPoints < CONFIG.HALFTIME_SCORE_TARGET) {
+      if (leadingScore < CONFIG.HALFTIME_SCORE_TARGET) {
         this.halftimeAutoSuppressed = false;
       } else {
         return;
       }
     }
-    if (totalPoints >= CONFIG.HALFTIME_SCORE_TARGET) {
+
+    if (leadingScore >= CONFIG.HALFTIME_SCORE_TARGET) {
       const triggered = this.handleHalftime({ silent: true, reason: 'score' });
       if (triggered) {
-        Utils.showNotification(`Halftime reached after ${CONFIG.HALFTIME_SCORE_TARGET} total points.`, 'info');
+        Utils.showNotification(`Halftime reached once a team scored ${CONFIG.HALFTIME_SCORE_TARGET} points.`, 'info');
       }
     }
   }
@@ -1957,6 +1978,7 @@ class ScorekeeperApp {
     if (type !== 'matchstart') {
       this.addScoreToTable(logEntry);
       this.updateAbbaColumn();
+      this.adjustScoringTableSizing();
     }
     this.autoSave();
     return logEntry;
@@ -2247,6 +2269,7 @@ class ScorekeeperApp {
     if (setupAbba && typeof newValue === 'string') {
       setupAbba.value = this.abbaStart;
     }
+    this.adjustScoringTableSizing();
     if (shouldAutoSave) {
       this.autoSave();
     }
@@ -2290,6 +2313,78 @@ class ScorekeeperApp {
     } else {
       scoringTable.classList.add('abba-hidden');
     }
+  }
+
+  /**
+   * Ensure scoring table text fits within fixed columns
+   */
+  adjustScoringTableSizing() {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (this.tableResizeFrame) {
+      cancelAnimationFrame(this.tableResizeFrame);
+      this.tableResizeFrame = null;
+    }
+
+    this.tableResizeFrame = window.requestAnimationFrame(() => {
+      const table = document.getElementById('scoringTable');
+      if (!table) {
+        this.tableResizeFrame = null;
+        return;
+      }
+
+      const adjustableCells = table.querySelectorAll('th, td');
+      adjustableCells.forEach((cell) => {
+        if (!cell) {
+          return;
+        }
+
+        if (cell.offsetParent === null) {
+          cell.classList.remove('scoring-cell-truncated');
+          return;
+        }
+
+        if (cell.classList.contains('event-cell')) {
+          cell.classList.remove('scoring-cell-truncated');
+          cell.style.fontSize = '';
+          return;
+        }
+
+        cell.classList.remove('scoring-cell-truncated');
+        cell.style.fontSize = '';
+
+        const computedSize = parseFloat(window.getComputedStyle(cell).fontSize) || 12;
+        let currentSize = computedSize;
+        const minSize = Math.max(10, computedSize * 0.65);
+        const interactive = cell.querySelector('.edit-btn');
+        if (interactive) {
+          interactive.style.fontSize = '';
+        }
+
+        cell.style.fontSize = `${currentSize}px`;
+
+        if (!cell.clientWidth) {
+          return;
+        }
+
+        while (cell.scrollWidth > cell.clientWidth && currentSize > minSize) {
+          currentSize = Math.max(minSize, currentSize - 0.5);
+          cell.style.fontSize = `${currentSize}px`;
+        }
+
+        if (interactive) {
+          interactive.style.fontSize = `${Math.max(10, currentSize - 1)}px`;
+        }
+
+        if (cell.scrollWidth > cell.clientWidth + 1) {
+          cell.classList.add('scoring-cell-truncated');
+        }
+      });
+
+      this.tableResizeFrame = null;
+    });
   }
 
   /**
@@ -2620,6 +2715,8 @@ class ScorekeeperApp {
 
     // Add to table
     this.addScoreToTable(logEntry);
+    this.updateAbbaColumn();
+    this.adjustScoringTableSizing();
     this.maybeTriggerHalftimeByScore();
     this.attemptPendingHalftime();
     
@@ -2698,6 +2795,11 @@ class ScorekeeperApp {
     const teamLetter = this.getTeamLetterFromLog(logEntry);
     const normalizedTeamLetter = (teamLetter || '').toUpperCase();
     const row = document.createElement('tr');
+    const buildEditButton = (extraClass = '') => {
+      const classes = ['edit-btn'];
+      if (extraClass) classes.push(extraClass);
+      return `<button type="button" class="${classes.join(' ')}" aria-label="Edit entry"><span class="icon-gear" aria-hidden="true"></span></button>`;
+    };
 
     row.setAttribute('data-score-id', logEntry.scoreID);
 
@@ -2719,7 +2821,7 @@ class ScorekeeperApp {
         <td class="total">${scoreboard}</td>
         <td></td>
         <td></td>
-        <td><button type="button" class="edit-btn timeout-edit-btn">Edit</button></td>
+        <td>${buildEditButton('timeout-edit-btn')}</td>
       `;
       } else if (normalizedTeamLetter === 'B') {
         row.innerHTML = `
@@ -2728,7 +2830,7 @@ class ScorekeeperApp {
         <td></td>
         <td class="total">${scoreboard}</td>
         <td colspan="2" class="event-cell">${label}</td>
-        <td><button type="button" class="edit-btn timeout-edit-btn">Edit</button></td>
+        <td>${buildEditButton('timeout-edit-btn')}</td>
       `;
       } else {
         row.innerHTML = `
@@ -2736,7 +2838,7 @@ class ScorekeeperApp {
         <td colspan="2" class="event-cell">${label}</td>
         <td class="total">${scoreboard}</td>
         <td colspan="2" class="event-cell">${label}</td>
-        <td><button type="button" class="edit-btn timeout-edit-btn">Edit</button></td>
+        <td>${buildEditButton('timeout-edit-btn')}</td>
       `;
       }
       const editBtn = row.querySelector('.timeout-edit-btn');
@@ -2754,7 +2856,7 @@ class ScorekeeperApp {
         <td colspan="2" class="event-cell">${label}</td>
         <td class="total">${scoreboard}</td>
         <td colspan="2" class="event-cell">${label}</td>
-        <td><button type="button" class="edit-btn halftime-edit-btn">Edit</button></td>
+        <td>${buildEditButton('halftime-edit-btn')}</td>
       `;
       const editBtn = row.querySelector('.halftime-edit-btn');
       if (editBtn) {
@@ -2783,12 +2885,12 @@ class ScorekeeperApp {
     if (isScore && teamLetter === 'A') {
       row.innerHTML = `
         <td class=\"abba-cell\">${abba}</td>
-        <td>${logEntry.Score}</td>
-        <td>${logEntry.Assist}</td>
+        <td class="score-cell">${logEntry.Score}</td>
+        <td class="assist-cell">${logEntry.Assist}</td>
         <td class="total">${scoreboard}</td>
         <td></td>
         <td></td>
-        <td><button type="button" class="edit-btn">Edit</button></td>
+        <td>${buildEditButton()}</td>
       `;
     } else if (isScore) {
       row.innerHTML = `
@@ -2796,9 +2898,9 @@ class ScorekeeperApp {
         <td></td>
         <td></td>
         <td class="total">${scoreboard}</td>
-        <td>${logEntry.Score}</td>
-        <td>${logEntry.Assist}</td>
-        <td><button type="button" class="edit-btn">Edit</button></td>
+        <td class="score-cell">${logEntry.Score}</td>
+        <td class="assist-cell">${logEntry.Assist}</td>
+        <td>${buildEditButton()}</td>
       `;
     } else {
       return null;
@@ -2830,6 +2932,7 @@ class ScorekeeperApp {
       row.cells[4].textContent = scorer;
       row.cells[5].textContent = assist;
     }
+    this.adjustScoringTableSizing();
   }
 
   /**
