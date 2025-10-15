@@ -60,6 +60,17 @@
       <div class="time-additions-trigger">
         <button type="button" class="main-button taller-button" id="openTimePopupBtn" disabled>Additional time options</button>
       </div>
+      <!-- Add Score Buttons -->
+      <div class="add-score-button">
+        <button type="button" class="main-button taller-button" id="startMatchBtn">
+          Start Match
+        </button>
+        <button type="button" class="main-button taller-button add-score hidden" id="addScoreTeamA">
+          + Add Score for Team A </button>
+        <button type="button" class="main-button taller-button add-score hidden" id="addScoreTeamB">
+          + Add Score for Team B </button>
+      </div>
+
       <!-- Scoring Table -->
       <table id="scoringTable">
         <tr>
@@ -73,17 +84,6 @@
         </tr>
         <tbody id="scoringTableBody"></tbody>
       </table>
-
-      <!-- Add Score Buttons -->
-      <div class="add-score-button">
-        <button type="button" class="main-button taller-button" id="startMatchBtn">
-          Start Match
-        </button>
-        <button type="button" class="main-button taller-button add-score hidden" id="addScoreTeamA">
-          + Add Score for Team A </button>
-        <button type="button" class="main-button taller-button add-score hidden" id="addScoreTeamB">
-          + Add Score for Team B </button>
-      </div>
 
       <!-- Team List Section -->
       <div class="team-list-container">
@@ -222,16 +222,16 @@
           <div class="timeout-team-label" id="timeoutTeamLabelA">Team A</div>
           <button type="button" class="main-button taller-button timeout-button" id="timeoutTeamA">Timeout A</button>
           <div class="timeout-remaining">
-            <span>Remaining (total): <strong id="timeoutARemainingTotal">0</strong></span>
-            <span>Remaining (half): <strong id="timeoutARemainingHalf">0</strong></span>
+            <span>Remaining (total): <strong id="timeoutARemainingTotal">2</strong></span>
+            <span>Remaining (half): <strong id="timeoutARemainingHalf">N/A</strong></span>
           </div>
         </div>
         <div class="timeout-team">
           <div class="timeout-team-label" id="timeoutTeamLabelB">Team B</div>
           <button type="button" class="main-button taller-button timeout-button" id="timeoutTeamB">Timeout B</button>
           <div class="timeout-remaining">
-            <span>Remaining (total): <strong id="timeoutBRemainingTotal">0</strong></span>
-            <span>Remaining (half): <strong id="timeoutBRemainingHalf">0</strong></span>
+            <span>Remaining (total): <strong id="timeoutBRemainingTotal">2</strong></span>
+            <span>Remaining (half): <strong id="timeoutBRemainingHalf">N/A</strong></span>
           </div>
         </div>
       </div>
@@ -292,7 +292,7 @@
     </div>
     <div class="popup-field">
       <label for="setupTimeoutsPerHalf">Timeouts per half</label>
-      <input type="number" id="setupTimeoutsPerHalf" min="0" max="10" value="2">
+      <input type="number" id="setupTimeoutsPerHalf" min="0" max="10" value="0">
     </div>
     <div class="popup-field">
       <label for="setupAbba">ABBA</label>

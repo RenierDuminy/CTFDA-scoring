@@ -241,6 +241,7 @@ input[type="button"]:hover,
   justify-content: space-evenly;
   gap: 15px;
   width: 100%;
+  margin: 0 0 1.25rem;
 }
 
 /* Add score buttons */
@@ -366,7 +367,7 @@ input[type="button"]:hover,
 .time-additions-trigger {
   display: flex;
   justify-content: center;
-  margin: 0.5rem 0 1.5rem;
+  margin: 0.75rem 0 1.25rem;
 }
 
 .time-additions-trigger .main-button {

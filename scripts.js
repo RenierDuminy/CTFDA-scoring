@@ -9,7 +9,7 @@
 const CONFIG = {
 
   API_URL: "https://docs.google.com/spreadsheets/d/1mhuN_H1C_DZ26r1NQRf4muQwszSd8F9mCfyWF5Iwjjo/export?format=csv&gid=884172048",
-  SUBMIT_URL: "https://script.google.com/macros/s/AKfycbzFIR36V3v_L1OppUTNGBiicJSSCUtO7EUNcLgj3oYoP7k3uIzMLqffAwW_sT2W87fF/exec",
+  SUBMIT_URL: "https://script.google.com/macros/s/AKfycbwDvvk2APZBToiqJ9D0FQQX2KlSbH5lZcfYOT4qTJnwiQjSSEUDlUD5WHZGv5eHJ2mk/exec",
   DEFAULT_TIMER_MINUTES: 100,
   LOADING_ANIMATION_INTERVAL: 500,
   AUTO_SAVE_INTERVAL: 2000, // Auto-save every 2 seconds
@@ -26,7 +26,7 @@ const CONFIG = {
 
 const SPECIAL_OPTIONS = {
   NA: 'N/A',
-  CALLAHAN: '‼️CALLAHAN‼️'
+  CALLAHAN: '‼CALLAHAN‼',
 };
 
 // =====================================================
@@ -274,14 +274,15 @@ class PersistenceManager {
       halftimeDuration: 55,
       halftimeBreakDuration: 7,
       timeoutDuration: 75,
-      timeoutsTotal: 3,
-      timeoutsPerHalf: 2,
+      timeoutsTotal: 2,
+      timeoutsPerHalf: 0,
       abbaStart: 'M',
       stoppageActive: false,
       timeoutState: {
-        A: { totalRemaining: 3, halfRemaining: 2 },
-        B: { totalRemaining: 3, halfRemaining: 2 }
+        A: { totalRemaining: 2, halfRemaining: 2 },
+        B: { totalRemaining: 2, halfRemaining: 2 }
       },
+      halftimeReasonResolved: null,
       scoreLogs: [],
       matchStarted: false,
       timestamp: Date.now()
@@ -543,14 +544,15 @@ class DataManager {
       halftimeDuration: 55,
       halftimeBreakDuration: 7,
       timeoutDuration: 75,
-      timeoutsTotal: 3,
-      timeoutsPerHalf: 2,
+      timeoutsTotal: 2,
+      timeoutsPerHalf: 0,
       abbaStart: 'M',
       stoppageActive: false,
       timeoutState: {
-        A: { totalRemaining: 3, halfRemaining: 2 },
-        B: { totalRemaining: 3, halfRemaining: 2 }
+        A: { totalRemaining: 2, halfRemaining: 2 },
+        B: { totalRemaining: 2, halfRemaining: 2 }
       },
+      halftimeReasonResolved: null,
       scoreLogs: [],
       matchStarted: false,
       timestamp: Date.now()
@@ -1056,18 +1058,18 @@ class ScorekeeperApp {
       halftimeDuration: 55,
       halftimeBreakDuration: 7,
       timeoutDuration: 75,
-      timeoutsTotal: 3,
-      timeoutsPerHalf: 2
+      timeoutsTotal: 2,
+      timeoutsPerHalf: 0
     };
 
     this.timeoutState = {
       A: {
         totalRemaining: this.gameSettings.timeoutsTotal,
-        halfRemaining: this.gameSettings.timeoutsPerHalf
+        halfRemaining: this.gameSettings.timeoutsPerHalf || this.gameSettings.timeoutsTotal
       },
       B: {
         totalRemaining: this.gameSettings.timeoutsTotal,
-        halfRemaining: this.gameSettings.timeoutsPerHalf
+        halfRemaining: this.gameSettings.timeoutsPerHalf || this.gameSettings.timeoutsTotal
       }
     };
     
@@ -1080,6 +1082,7 @@ class ScorekeeperApp {
     this.halftimeTriggered = false;
     this.halftimeAutoSuppressed = false;
     this.halftimePendingReason = null;
+    this.halftimeReasonResolved = null;
     this.isRestoring = false;
     this.abbaStart = 'M';
     this.matchStarted = false;
@@ -1212,8 +1215,8 @@ class ScorekeeperApp {
           halftimeDuration: 55,
           halftimeBreakDuration: 7,
           timeoutDuration: 75,
-          timeoutsTotal: 3,
-          timeoutsPerHalf: 2
+          timeoutsTotal: 2,
+          timeoutsPerHalf: 0
         };
         this.applyGameSettingsToUI();
         this.abbaStart = 'M';
@@ -1244,6 +1247,12 @@ class ScorekeeperApp {
       ? storedMatchStarted
       : Array.isArray(gameState.scoreLogs) && gameState.scoreLogs.length > 0;
     this.halftimeAutoSuppressed = false;
+    const hasHalftimeLog = Array.isArray(gameState.scoreLogs)
+      ? gameState.scoreLogs.some((log) => (log?.Type || '').toLowerCase() === 'halftime')
+      : false;
+    this.halftimeReasonResolved = hasHalftimeLog
+      ? (gameState.halftimeReasonResolved || null)
+      : null;
     
     // Restore team selections
     const teamASelect = document.getElementById('teamA');
@@ -1283,8 +1292,8 @@ class ScorekeeperApp {
     this.gameSettings.halftimeDuration = numberOr(gameState.halftimeDuration, 55);
     this.gameSettings.halftimeBreakDuration = numberOr(gameState.halftimeBreakDuration, 7);
     this.gameSettings.timeoutDuration = numberOr(gameState.timeoutDuration, 75);
-    this.gameSettings.timeoutsTotal = numberOr(gameState.timeoutsTotal, 3);
-    this.gameSettings.timeoutsPerHalf = numberOr(gameState.timeoutsPerHalf, 2);
+    this.gameSettings.timeoutsTotal = numberOr(gameState.timeoutsTotal, 2);
+    this.gameSettings.timeoutsPerHalf = numberOr(gameState.timeoutsPerHalf, 0);
     this.applyGameSettingsToUI();
 
     // Restore ABBA start if present
@@ -1341,7 +1350,13 @@ class ScorekeeperApp {
         scoringIndex++;
       }
       const row = this.createScoreRow(logEntry, abbaIndex);
-      if (row) scoringTableBody.appendChild(row);
+      if (row) {
+        if (scoringTableBody.firstChild) {
+          scoringTableBody.insertBefore(row, scoringTableBody.firstChild);
+        } else {
+          scoringTableBody.appendChild(row);
+        }
+      }
     });
 
     this.updateAbbaColumn();
@@ -1378,6 +1393,7 @@ class ScorekeeperApp {
       timeoutsPerHalf: this.gameSettings.timeoutsPerHalf,
       timeoutState: this.getTimeoutStateSnapshot(),
       matchStarted: this.matchStarted,
+      halftimeReasonResolved: this.halftimeReasonResolved,
       timestamp: Date.now()
     };
     
@@ -1733,6 +1749,7 @@ class ScorekeeperApp {
       if (startBtn) startBtn.classList.remove('hidden');
       addButtons.forEach((btn) => btn.classList.add('hidden'));
     }
+    this.updateAddScoreButtonsState(addButtons);
     if (timeOptionsBtn) {
       if (this.matchStarted) {
         timeOptionsBtn.disabled = false;
@@ -1774,6 +1791,7 @@ class ScorekeeperApp {
     this.currentHalftimeEditID = null;
     this.halftimePendingReason = null;
     this.halftimeAutoSuppressed = false;
+    this.halftimeReasonResolved = null;
     this.hardCapReached = false;
     this.matchStarted = true;
     this.timerManager.start();
@@ -1808,13 +1826,21 @@ class ScorekeeperApp {
       return false;
     }
 
-    const defaultHalf = this.gameSettings.timeoutsPerHalf;
-    ['A', 'B'].forEach((teamKey) => {
-      if (this.timeoutState?.[teamKey]) {
-        const totalRemaining = this.timeoutState[teamKey].totalRemaining;
-        this.timeoutState[teamKey].halfRemaining = Math.min(defaultHalf, totalRemaining);
-      }
-    });
+    if (this.usesPerHalfTimeouts()) {
+      const defaultHalf = Math.min(this.gameSettings.timeoutsPerHalf, this.gameSettings.timeoutsTotal);
+      ['A', 'B'].forEach((teamKey) => {
+        if (this.timeoutState?.[teamKey]) {
+          const totalRemaining = this.timeoutState[teamKey].totalRemaining;
+          this.timeoutState[teamKey].halfRemaining = Math.min(defaultHalf, totalRemaining);
+        }
+      });
+    } else {
+      ['A', 'B'].forEach((teamKey) => {
+        if (this.timeoutState?.[teamKey]) {
+          this.timeoutState[teamKey].halfRemaining = this.timeoutState[teamKey].totalRemaining;
+        }
+      });
+    }
     this.updateTimeoutUI();
 
     const halftimeBreakMinutes = this.gameSettings.halftimeBreakDuration || 7;
@@ -1824,7 +1850,10 @@ class ScorekeeperApp {
       this.secondsTimer.start();
     }
 
-    const halftimeLog = this.recordSpecialEvent('halftime');
+    const triggerReason = (reason && typeof reason === 'string') ? reason : 'manual';
+    this.halftimeReasonResolved = triggerReason;
+
+    const halftimeLog = this.recordSpecialEvent('halftime', null, { HalftimeReason: triggerReason });
     this.halftimeTriggered = true;
     if (halftimeLog && halftimeLog.scoreID) {
       this.currentHalftimeEditID = halftimeLog.scoreID;
@@ -1850,10 +1879,21 @@ class ScorekeeperApp {
     if (this.halftimeTriggered) {
       this.halftimePendingReason = null;
     }
+    if (!latest) {
+      this.halftimeReasonResolved = null;
+    } else if (!this.halftimeReasonResolved) {
+      this.halftimeReasonResolved = latest.HalftimeReason || 'restored';
+    }
   }
 
   maybeTriggerHalftimeByScore() {
     if (!this.matchStarted || this.halftimeTriggered) {
+      return;
+    }
+    if (this.halftimeReasonResolved) {
+      return;
+    }
+    if (this.halftimeReasonResolved && this.halftimeReasonResolved !== 'score') {
       return;
     }
 
@@ -1872,6 +1912,20 @@ class ScorekeeperApp {
         Utils.showNotification(`Halftime reached once a team scored ${CONFIG.HALFTIME_SCORE_TARGET} points.`, 'info');
       }
     }
+  }
+
+  updateAddScoreButtonsState(buttons = null) {
+    const addButtons = buttons || document.querySelectorAll('.add-score-button .add-score');
+    const disable = Boolean(this.hardCapReached);
+    addButtons.forEach((btn) => {
+      if (!btn) return;
+      btn.disabled = disable;
+      if (disable) {
+        btn.title = 'Score cap reached.';
+      } else {
+        btn.removeAttribute('title');
+      }
+    });
   }
 
   maybeTriggerHalftimeByTime(timeRemaining = null) {
@@ -1909,6 +1963,7 @@ class ScorekeeperApp {
 
   attemptPendingHalftime() {
     if (!this.matchStarted || this.halftimeTriggered) return;
+    if (this.halftimeReasonResolved) return;
     if (this.halftimePendingReason !== 'clock') return;
 
     const reason = this.halftimePendingReason;
@@ -1939,7 +1994,7 @@ class ScorekeeperApp {
     }
   }
 
-  recordSpecialEvent(type, teamLetter = null) {
+  recordSpecialEvent(type, teamLetter = null, extra = {}) {
     let displayLabel;
     switch (type) {
       case 'timeout':
@@ -1965,7 +2020,8 @@ class ScorekeeperApp {
       Event: displayLabel,
       Score: '',
       Assist: '',
-      EventType: this.getEventTypeLabel(type)
+      EventType: this.getEventTypeLabel(type),
+      ...extra
     };
     if (!teamLetter) {
       overrides.Team = '';
@@ -1988,6 +2044,7 @@ class ScorekeeperApp {
     const { silent = false } = options;
     const CAP = 15;
     const reached = (this.teamAScore >= CAP) || (this.teamBScore >= CAP);
+    const wasHardCap = this.hardCapReached;
     if (reached && !this.hardCapReached) {
       this.hardCapReached = true;
       if (this.timerManager) this.timerManager.stop();
@@ -1997,6 +2054,9 @@ class ScorekeeperApp {
       }
     } else if (!reached && this.hardCapReached) {
       this.hardCapReached = false;
+    }
+    if (wasHardCap !== this.hardCapReached || !wasHardCap) {
+      this.updateAddScoreButtonsState();
     }
   }
 
@@ -2173,6 +2233,7 @@ class ScorekeeperApp {
     this.halftimeAutoSuppressed = true;
     this.halftimePendingReason = null;
     this.halftimeTriggered = false;
+    this.halftimeReasonResolved = null;
     this.closeHalftimeEditPopup();
 
     const row = document.querySelector(`tr[data-score-id="${scoreID}"]`);
@@ -2288,7 +2349,8 @@ class ScorekeeperApp {
     if (!tbody) return;
     const rows = Array.from(tbody.querySelectorAll('tr'));
     let scoringIndex = 0;
-    rows.forEach((row) => {
+    for (let i = rows.length - 1; i >= 0; i -= 1) {
+      const row = rows[i];
       const abbaCell = row.cells?.[0];
       if (!abbaCell) return;
       const scoreId = row.getAttribute('data-score-id');
@@ -2299,7 +2361,7 @@ class ScorekeeperApp {
       } else {
         abbaCell.textContent = '';
       }
-    });
+    }
   }
 
   /**
@@ -2477,26 +2539,37 @@ class ScorekeeperApp {
     }
   }
 
+  usesPerHalfTimeouts() {
+    return Number.isFinite(this.gameSettings.timeoutsPerHalf) && this.gameSettings.timeoutsPerHalf > 0;
+  }
+
   /**
    * Initialize or restore timeout counts
    */
   initializeTimeoutState(savedState = null) {
-    const defaultTotal = this.gameSettings.timeoutsTotal;
-    const defaultHalf = this.gameSettings.timeoutsPerHalf;
+    const defaultTotal = Math.max(0, this.gameSettings.timeoutsTotal);
+    const perHalfEnabled = this.usesPerHalfTimeouts();
+    const defaultHalf = perHalfEnabled
+      ? Math.min(this.gameSettings.timeoutsPerHalf, defaultTotal)
+      : defaultTotal;
 
     const clampCount = (value, fallback, max) => {
       if (typeof value !== 'number' || Number.isNaN(value) || value < 0) {
         return fallback;
       }
-      const upperBound = typeof max === 'number' ? max : fallback;
+      const upperBound = typeof max === 'number' ? Math.max(0, max) : fallback;
       return Math.min(value, upperBound);
     };
 
     const createState = (teamKey) => {
       const source = savedState?.[teamKey];
+      const totalRemaining = clampCount(source?.totalRemaining, defaultTotal, defaultTotal);
+      const halfRemaining = perHalfEnabled
+        ? clampCount(source?.halfRemaining, defaultHalf, defaultHalf)
+        : totalRemaining;
       return {
-        totalRemaining: clampCount(source?.totalRemaining, defaultTotal, defaultTotal),
-        halfRemaining: clampCount(source?.halfRemaining, defaultHalf, defaultHalf)
+        totalRemaining,
+        halfRemaining
       };
     };
 
@@ -2512,11 +2585,16 @@ class ScorekeeperApp {
    * Snapshot helper to avoid direct references when saving
    */
   getTimeoutStateSnapshot() {
+    const perHalfEnabled = this.usesPerHalfTimeouts();
     const makeCopy = (teamKey) => {
       const source = this.timeoutState?.[teamKey] || {};
+      const total = source.totalRemaining ?? this.gameSettings.timeoutsTotal;
+      const half = perHalfEnabled
+        ? (source.halfRemaining ?? this.gameSettings.timeoutsPerHalf)
+        : total;
       return {
-        totalRemaining: source.totalRemaining ?? this.gameSettings.timeoutsTotal,
-        halfRemaining: source.halfRemaining ?? this.gameSettings.timeoutsPerHalf
+        totalRemaining: total,
+        halfRemaining: half
       };
     };
 
@@ -2531,15 +2609,17 @@ class ScorekeeperApp {
    */
   updateTimeoutUI() {
     const state = this.getTimeoutStateSnapshot();
+    const perHalfEnabled = this.usesPerHalfTimeouts();
+    const formatHalf = (teamState) => (perHalfEnabled ? teamState.halfRemaining : 'N/A');
     const setText = (id, value) => {
       const el = document.getElementById(id);
       if (el) el.textContent = value;
     };
 
     setText('timeoutARemainingTotal', state.A.totalRemaining);
-    setText('timeoutARemainingHalf', state.A.halfRemaining);
+    setText('timeoutARemainingHalf', formatHalf(state.A));
     setText('timeoutBRemainingTotal', state.B.totalRemaining);
-    setText('timeoutBRemainingHalf', state.B.halfRemaining);
+    setText('timeoutBRemainingHalf', formatHalf(state.B));
   }
 
   /**
@@ -2556,7 +2636,10 @@ class ScorekeeperApp {
     }
     if (!this.timeoutState?.[team]) return;
 
-    const teamName = team === 'A' ? 'Team A' : 'Team B';
+    const teamNameInputId = team === 'A' ? 'teamA' : 'teamB';
+    const teamDisplayName = (document.getElementById(teamNameInputId)?.value || '').trim() || (team === 'A' ? 'Team A' : 'Team B');
+    const perHalfEnabled = this.usesPerHalfTimeouts();
+    const teamName = teamDisplayName;
     const state = this.timeoutState[team];
 
     if (state.totalRemaining <= 0) {
@@ -2564,13 +2647,17 @@ class ScorekeeperApp {
       return;
     }
 
-    if (state.halfRemaining <= 0) {
+    if (perHalfEnabled && state.halfRemaining <= 0) {
       Utils.showNotification(`${teamName} has no timeouts remaining for this half.`, 'error');
       return;
     }
 
     state.totalRemaining = Math.max(0, state.totalRemaining - 1);
-    state.halfRemaining = Math.max(0, state.halfRemaining - 1);
+    if (perHalfEnabled) {
+      state.halfRemaining = Math.max(0, state.halfRemaining - 1);
+    } else {
+      state.halfRemaining = state.totalRemaining;
+    }
 
     this.updateTimeoutUI();
     if (this.secondsTimer && typeof this.secondsTimer.reset === 'function') {
@@ -2587,19 +2674,28 @@ class ScorekeeperApp {
   adjustTimeoutCountsForEdit(oldTeam, newTeam) {
     const normalize = (value, max) => {
       if (typeof value !== 'number' || Number.isNaN(value)) return 0;
-      return Math.max(0, Math.min(value, max));
+      const bounded = Math.max(0, value);
+      if (!Number.isFinite(max) || max <= 0) {
+        return bounded;
+      }
+      return Math.min(bounded, max);
     };
+    const perHalfEnabled = this.usesPerHalfTimeouts();
 
     if (oldTeam && this.timeoutState?.[oldTeam]) {
       const state = this.timeoutState[oldTeam];
       state.totalRemaining = normalize(state.totalRemaining + 1, this.gameSettings.timeoutsTotal);
-      state.halfRemaining = normalize(state.halfRemaining + 1, this.gameSettings.timeoutsPerHalf);
+      state.halfRemaining = perHalfEnabled
+        ? normalize(state.halfRemaining + 1, this.gameSettings.timeoutsPerHalf)
+        : state.totalRemaining;
     }
 
     if (newTeam && this.timeoutState?.[newTeam]) {
       const state = this.timeoutState[newTeam];
       state.totalRemaining = normalize(state.totalRemaining - 1, this.gameSettings.timeoutsTotal);
-      state.halfRemaining = normalize(state.halfRemaining - 1, this.gameSettings.timeoutsPerHalf);
+      state.halfRemaining = perHalfEnabled
+        ? normalize(state.halfRemaining - 1, this.gameSettings.timeoutsPerHalf)
+        : state.totalRemaining;
     }
 
     this.updateTimeoutUI();
@@ -2611,6 +2707,10 @@ class ScorekeeperApp {
   openPopup(team) {
     if (!this.matchStarted) {
       Utils.showNotification('Start the match before adding scores.', 'error');
+      return;
+    }
+    if (this.hardCapReached) {
+      Utils.showNotification('Score cap reached. No further scores can be added.', 'warning');
       return;
     }
     this.currentEditID = null;
@@ -2785,7 +2885,11 @@ class ScorekeeperApp {
     const abbaIndex = this.getAbbaIndexForLog(logEntry);
     const row = this.createScoreRow(logEntry, abbaIndex);
     if (!row) return;
-    scoringTableBody.appendChild(row);
+    if (scoringTableBody.firstChild) {
+      scoringTableBody.insertBefore(row, scoringTableBody.firstChild);
+    } else {
+      scoringTableBody.appendChild(row);
+    }
   }
 
   /**
@@ -3279,7 +3383,13 @@ class ScorekeeperApp {
         scoringIndex++;
       }
       const row = this.createScoreRow(logEntry, abbaIndex);
-      if (row) scoringTableBody.appendChild(row);
+      if (row) {
+        if (scoringTableBody.firstChild) {
+          scoringTableBody.insertBefore(row, scoringTableBody.firstChild);
+        } else {
+          scoringTableBody.appendChild(row);
+        }
+      }
     });
 
     // Ensure ABBA column matches
@@ -3409,6 +3519,7 @@ class ScorekeeperApp {
     this.halftimeTriggered = false;
     this.halftimePendingReason = null;
     this.halftimeAutoSuppressed = false;
+    this.halftimeReasonResolved = null;
 
     this.initializeTimeoutState();
     this.matchStarted = false;
